@@ -11,7 +11,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KitStack.Storage.Local", "s
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KitStack.AspNetCore", "src\KitStack.AspNetCore\KitStack.AspNetCore.csproj", "{3D7A4C83-FFA9-BA75-AE31-23B4A740B563}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KitStack.Fakes", "src\KitStack.Fakes\KitStack.Fakes.csproj", "{EAB6A267-57D0-BFC6-3B9A-2B0B1903E083}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KitStack.Storage.Fakes", "src\KitStack.Fakes\KitStack.Storage.Fakes.csproj", "{EAB6A267-57D0-BFC6-3B9A-2B0B1903E083}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KitStack.Samples.Web", "src\KitStack.Samples.Web\KitStack.Samples.Web.csproj", "{7052689C-AC24-D5C5-8E72-B98445BC82CA}"
 EndProject
