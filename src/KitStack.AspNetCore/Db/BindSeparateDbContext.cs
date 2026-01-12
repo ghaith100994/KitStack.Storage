@@ -10,18 +10,18 @@ namespace KitStack.AspNetCore.Db;
 /// should be implemented in the infrastructure layer or by calling provider-specific registration code
 /// to avoid bringing heavy SDK dependencies into this package.
 /// </summary>
-public static class BindSeparateDbContext
+public static class BindSeparateDbContextExtensions
 {
     /// <summary>
     /// Bind TOptions from configuration (Storage:Database) and return IServiceCollection.
     /// Implementations that need to register a concrete DbContext or MongoDB mappings should be placed in
     /// the infrastructure project (where DB SDK dependencies can be added).
     /// </summary>
-    public static IServiceCollection BindSeparateDbContext<TContext, TOptions>(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection BindSeparateDbContextOptions<TContext, TOptions>(this IServiceCollection services, IConfiguration configuration)
         where TOptions : class, new()
     {
-        if (services == null) throw new ArgumentNullException(nameof(services));
-        if (configuration == null) throw new ArgumentNullException(nameof(configuration));
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
 
         // Bind Storage.Database into TOptions (consumer should provide Storage.Database in configuration)
         var dbSection = configuration.GetSection("Storage").GetSection("Database");

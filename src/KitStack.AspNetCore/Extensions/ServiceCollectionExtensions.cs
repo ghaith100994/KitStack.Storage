@@ -31,11 +31,11 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(storageSection);
 
         // Bind Storage options
-        services.Configure<StorageOptions>(storageSection);
+        services.Configure<StorageOptions>(opts => storageSection.Bind(opts));
 
         // Bind Storage.Database section (optional)
         var dbSection = storageSection.GetSection("Database");
-        services.Configure<StorageDbOptions>(dbSection);
+        services.Configure<StorageDbOptions>(opts => dbSection.Bind(opts));
 
         // decide which provider to register (simple switch)
         var provider = storageSection.GetValue<string>("Provider") ?? string.Empty;

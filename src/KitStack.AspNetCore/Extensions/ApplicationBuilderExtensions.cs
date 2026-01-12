@@ -1,10 +1,7 @@
-﻿using System;
-using System.IO;
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
-using KitStack.Abstractions.Options;
 using KitStack.Storage.Local.Options;
 
 namespace KitStack.AspNetCore.Extensions;
