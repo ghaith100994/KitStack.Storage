@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.3.11312.210 d18.3
+VisualStudioVersion = 18.3.11312.210
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
@@ -18,6 +18,8 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{7CB70183-3659-4F45-ACDC-EF75243D3EAB}"
 	ProjectSection(SolutionItems) = preProject
 		.gitignore = .gitignore
+		Directory.Build.props = Directory.Build.props
+		Directory.Packages.props = Directory.Packages.props
 		LICENSE = LICENSE
 		README.md = README.md
 	EndProjectSection
@@ -102,5 +104,8 @@ Global
 		{3D7A4C83-FFA9-BA75-AE31-23B4A740B563} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{EAB6A267-57D0-BFC6-3B9A-2B0B1903E083} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{7052689C-AC24-D5C5-8E72-B98445BC82CA} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {817F170F-C3EF-475B-AB7A-15EBE54A5627}
 	EndGlobalSection
 EndGlobal
