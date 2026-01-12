@@ -20,7 +20,11 @@ public class FileEntry : IFileEntry
 
     public string? ContentType { get; set; }
 
+    public string? FileExtension { get; set; }
+
     public IDictionary<string, string>? Metadata { get; set; }
 
     public DateTimeOffset UploadedTime { get; set; } = DateTimeOffset.UtcNow;
+
+    public string? VariantType { get; set; }
 }

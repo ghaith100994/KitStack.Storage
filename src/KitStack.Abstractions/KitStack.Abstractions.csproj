@@ -1,3 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" />
+		<PackageReference Include="SixLabors.ImageSharp" />
+	</ItemGroup>
 </Project>

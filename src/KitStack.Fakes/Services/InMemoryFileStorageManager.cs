@@ -4,6 +4,8 @@ using KitStack.Fakes.Contracts;
 using KitStack.Fakes.Models;
 using KitStack.Fakes.Options;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Http;
+using KitStack.Abstractions.Models;
 
 namespace KitStack.Fakes.Services;
 
@@ -19,6 +21,49 @@ public class InMemoryFileStorageManager : IFileStorageManager, IFakeFileStore
     public InMemoryFileStorageManager(IOptions<FakeOptions>? options = null)
     {
         _options = options?.Value ?? new FakeOptions();
+    }
+
+    // High-level convenience to create/store an IFormFile for an entity T (in-memory)
+    public async Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
+        where T : class
+    {
+        if (file == null) throw new ArgumentNullException(nameof(file));
+        if (string.IsNullOrWhiteSpace(category)) throw new ArgumentException("Category is required.", nameof(category));
+
+        await SimulateDelayAsync(cancellationToken).ConfigureAwait(false);
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var entityName = typeof(T).Name;
+
+        var typeFolder = KitStack.Abstractions.Utilities.ImageProcessingHelper.GetFileTypeFolder(extension);
+        var relativeFolderPath = Path.Combine(category, entityName, typeFolder);
+
+        var fileEntry = new KitStack.Abstractions.Models.FileEntry
+        {
+            Id = Guid.NewGuid(),
+            FileName = Path.GetFileName(file.FileName),
+            Size = file.Length,
+            ContentType = file.ContentType,
+            UploadedTime = DateTime.UtcNow,
+            Metadata = new Dictionary<string, string>()
+        };
+
+        fileEntry.Metadata[StorageMetadataKeys.FileExtension] = extension;
+
+        // Build a provider-relative location
+        var fileName = $"{fileEntry.Id:N}{extension}";
+        fileEntry.FileLocation = Path.Combine(relativeFolderPath, fileName).Replace('\\', '/');
+
+        // Read file into memory
+        await using var inStream = file.OpenReadStream();
+        using var ms = new MemoryStream();
+        await inStream.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
+        var bytes = ms.ToArray();
+
+        var stored = new FakeStoredFile(fileEntry, bytes);
+        _store[fileEntry.FileLocation] = stored;
+
+        return fileEntry;
     }
 
     private async Task SimulateDelayAsync(CancellationToken cancellationToken)

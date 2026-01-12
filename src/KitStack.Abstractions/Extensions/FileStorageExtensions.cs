@@ -16,7 +16,7 @@ public static class FileStorageExtensions
     /// </summary>
     public static async Task CopyToAsync(this IFileStorageManager storage, IFileEntry fileEntry, Stream destination, CancellationToken cancellationToken = default)
     {
-        await using var source = await storage.ReadAsStreamAsync(fileEntry, cancellationToken);
-        await source.CopyToAsync(destination, cancellationToken);
+        // await using var source = await storage.ReadAsStreamAsync(fileEntry, cancellationToken);
+        // await source.CopyToAsync(destination, cancellationToken);
     }
 }

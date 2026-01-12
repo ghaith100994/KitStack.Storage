@@ -32,6 +32,13 @@ public interface IFileEntry
     string? ContentType { get; set; }
 
     /// <summary>
+    /// Optional FileExtension.
+    /// </summary>
+    string? FileExtension { get; set; }
+
+
+
+    /// <summary>
     /// Additional metadata (provider-agnostic).
     /// </summary>
     IDictionary<string, string>? Metadata { get; set; }
@@ -40,4 +47,11 @@ public interface IFileEntry
     /// When the file was uploaded.
     /// </summary>
     DateTimeOffset UploadedTime { get; set; }
+
+    /// <summary>
+    /// Optional variant classification for this entry (e.g. "original", "thumbnail", "compressed", "small", etc.).
+    /// Providers should set this for variant files to make it easy to query / display.
+    /// </summary>
+    string? VariantType { get; set; }
+
 }

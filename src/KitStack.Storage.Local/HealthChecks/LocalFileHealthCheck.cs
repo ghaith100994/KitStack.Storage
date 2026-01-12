@@ -8,7 +8,7 @@ namespace KitStack.Storage.Local.HealthChecks;
 /// <summary>
 /// Health check that verifies the local storage path is writable.
 /// </summary>
-public class LocalFileHealthCheck : IHealthCheck
+public sealed class LocalFileHealthCheck : IHealthCheck
 {
     private readonly LocalOptions _options;
 
@@ -17,26 +17,51 @@ public class LocalFileHealthCheck : IHealthCheck
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
-    public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         try
         {
             var basePath = Path.IsPathRooted(_options.Path)
                 ? _options.Path
                 : Path.Combine(Directory.GetCurrentDirectory(), _options.Path);
 
+            // Ensure directory exists
             if (!Directory.Exists(basePath))
                 Directory.CreateDirectory(basePath);
 
             var testFile = Path.Combine(basePath, $"healthcheck-{Guid.NewGuid():N}.tmp");
-            File.WriteAllTextAsync(testFile, "ok", Encoding.UTF8, cancellationToken);
-            File.Delete(testFile);
 
-            return Task.FromResult(HealthCheckResult.Healthy($"Path: {basePath}"));
+            try
+            {
+                // Write and await to ensure the file is actually created and flushed
+                await File.WriteAllTextAsync(testFile, "ok", Encoding.UTF8, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                // Attempt to clean up the test file; ignore cleanup errors
+                try
+                {
+                    if (File.Exists(testFile))
+                        File.Delete(testFile);
+                }
+                catch
+                {
+                    // Swallow cleanup exceptions - they don't change the health outcome
+                }
+            }
+
+            // Healthy result with base path in description
+            return HealthCheckResult.Healthy($"Path: {basePath}");
+        }
+        catch (OperationCanceledException)
+        {
+            return new HealthCheckResult(context.Registration.FailureStatus, description: "Health check cancelled");
         }
         catch (Exception ex)
         {
-            return Task.FromResult(new HealthCheckResult(context.Registration.FailureStatus, exception: ex));
+            return new HealthCheckResult(context.Registration.FailureStatus, exception: ex);
         }
     }
 }
