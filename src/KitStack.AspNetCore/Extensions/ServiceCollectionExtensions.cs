@@ -3,6 +3,8 @@ using Microsoft.Extensions.DependencyInjection;
 using KitStack.Abstractions.Options;
 using KitStack.Storage.Local.Extensions;
 using KitStack.Storage.Local.HealthChecks;
+using KitStack.Storage.S3.Extensions;
+using KitStack.Storage.S3.HealthChecks;
 using KitStack.Fakes.Extensions;
 
 namespace KitStack.AspNetCore.Extensions;
@@ -60,6 +62,13 @@ public static class ServiceCollectionExtensions
             //     services.AddAzureBlobStorage(storageSection.GetSection("Azure"));
             //     services.AddHealthChecks().AddCheck<AzureBlobStorageHealthCheck>("azure_blob");
             //     break;
+
+            case "s3":
+                // S3 provider: expect a "S3" subsection under Storage
+                var s3Section = storageSection.GetSection("S3");
+                services.AddS3StorageManager(s3Section);
+                services.AddHealthChecks().AddCheck<S3HealthCheck>("s3");
+                break;
 
             default:
                 // No default provider registered here. Consumers can register provider implementations manually

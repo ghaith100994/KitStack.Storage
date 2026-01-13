@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace KitStack.Storage.S3.Services;
 
-public class S3PresignedUrlGenerator : IS3PresignedUrlGenerator
+public sealed class S3PresignedUrlGenerator : IS3PresignedUrlGenerator, IDisposable
 {
     private readonly AmazonS3Client _client;
     private readonly S3Options _options;
@@ -30,33 +30,27 @@ public class S3PresignedUrlGenerator : IS3PresignedUrlGenerator
         => GeneratePreSignedDownloadUrlAsync(key, expires, target: null);
 
     // Overloads that accept an optional target (bucket/region/etc). If target is null the main configured target is used.
-    public Task<Uri> GeneratePreSignedUploadUrlAsync(string key, TimeSpan expires, string? contentType, S3TargetOptions? target)
+    public async Task<Uri> GeneratePreSignedUploadUrlAsync(string key, TimeSpan expires, string? contentType, S3TargetOptions? target)
     {
-        var t = (target ?? _options.MainTarget) ?? throw new ArgumentException("No S3 target configured.");
+        var t = target ?? _options.MainTarget;
         var bucket = t.BucketName ?? string.Empty;
         var finalKey = NormalizeKeyWithPrefix(t.Prefix, key);
 
-        var client = CreateClientForTarget(t, out bool dispose);
-        try
+        using var client = CreateClientForTarget(t, out var _);
+        var request = new GetPreSignedUrlRequest
         {
-            var request = new GetPreSignedUrlRequest
-            {
-                BucketName = bucket,
-                Key = finalKey,
-                Verb = HttpVerb.PUT,
-                Expires = DateTime.UtcNow.Add(expires)
-            };
+            BucketName = bucket,
+            Key = finalKey,
+            Verb = HttpVerb.PUT,
+            Expires = DateTime.UtcNow.Add(expires)
+        };
 
-            if (!string.IsNullOrWhiteSpace(contentType))
-                request.ContentType = contentType;
+        if (!string.IsNullOrWhiteSpace(contentType))
+            request.ContentType = contentType;
 
-            var url = client.GetPreSignedURL(request);
-            return Task.FromResult(new Uri(url));
-        }
-        finally
-        {
-            if (dispose) client.Dispose();
-        }
+        var url = await client.GetPreSignedURLAsync(request);
+        return new Uri(url);
+        
     }
 
     public async Task<Uri> GeneratePreSignedDownloadUrlAsync(string key, TimeSpan expires, S3TargetOptions? target)
@@ -65,24 +59,18 @@ public class S3PresignedUrlGenerator : IS3PresignedUrlGenerator
         var bucket = t.BucketName ?? string.Empty;
         var finalKey = NormalizeKeyWithPrefix(t.Prefix, key);
 
-        var client = CreateClientForTarget(t, out bool dispose);
-        try
+        using var client = CreateClientForTarget(t, out var _);
+        var request = new GetPreSignedUrlRequest
         {
-            var request = new GetPreSignedUrlRequest
-            {
-                BucketName = bucket,
-                Key = finalKey,
-                Verb = HttpVerb.GET,
-                Expires = DateTime.UtcNow.Add(expires)
-            };
+            BucketName = bucket,
+            Key = finalKey,
+            Verb = HttpVerb.GET,
+            Expires = DateTime.UtcNow.Add(expires)
+        };
 
-            var url = await client.GetPreSignedURLAsync(request);
-            return new Uri(url);
-        }
-        finally
-        {
-            if (dispose) client.Dispose();
-        }
+        var url = await client.GetPreSignedURLAsync(request);
+        return new Uri(url);
+        
     }
 
     private static string NormalizeKeyWithPrefix(string? prefix, string key)
@@ -131,5 +119,23 @@ public class S3PresignedUrlGenerator : IS3PresignedUrlGenerator
                && string.Equals(a.Region, b.Region, StringComparison.OrdinalIgnoreCase)
                && string.Equals(a.ServiceUrl, b.ServiceUrl, StringComparison.OrdinalIgnoreCase)
                && string.Equals(a.Prefix, b.Prefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    private void Dispose(bool disposing)
+    {
+        if (!_disposed)
+        {
+            if (disposing)
+            {
+                _client?.Dispose();
+            }
+            _disposed = true;
+        }
     }
 }

@@ -28,8 +28,6 @@ public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
 
         // Create main client using credentials from target or options or default credential chain
         _client = CreateClientForTarget(_mainTarget);
-
-        // Bucket existence checks are available via S3BucketHelper.EnsureBucketsExistAsync
     }
 
     public async Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default) where T : class
@@ -338,6 +336,14 @@ public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
 
         var client = CreateClientForTarget(t);
         return (client, bucket!, true);
+    }
+
+    // Public resolver for external helpers to obtain a client and bucket for a given target.
+    // Returns IAmazonS3 to avoid exposing concrete SDK client type.
+    public (IAmazonS3 client, string bucketName, bool dispose) ResolveClientAndBucket(S3TargetOptions? target)
+    {
+        var (client, bucket, dispose) = GetClientAndBucket(target);
+        return (client, bucket, dispose);
     }
     #endregion
 }

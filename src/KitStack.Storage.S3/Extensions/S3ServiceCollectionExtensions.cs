@@ -22,7 +22,6 @@ public static class S3ServiceCollectionExtensions
                 .ValidateDataAnnotations()
                 .ValidateOnStart();
 
-
         services.AddSingleton<S3HealthCheck>();
         services.AddSingleton<IFileStorageManager, S3FileStorageManager>();
         services.AddSingleton<IS3PresignedUrlGenerator, S3PresignedUrlGenerator>();
@@ -36,7 +35,7 @@ public static class S3ServiceCollectionExtensions
         var ctx = new ValidationContext(options);
         if (!Validator.TryValidateObject(options, ctx, results, validateAllProperties: true))
         {
-            throw new OptionsValidationException(nameof(S3Options), typeof(S3Options), results.Select(r => r.ErrorMessage));
+            throw new OptionsValidationException(nameof(S3Options), typeof(S3Options), results.Select(r => r.ErrorMessage ?? string.Empty));
         }
 
         services.AddSingleton(_ => Microsoft.Extensions.Options.Options.Create(options));
