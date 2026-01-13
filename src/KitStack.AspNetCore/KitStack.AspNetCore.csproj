@@ -17,6 +17,8 @@
 		<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
 		<PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storageo</PackageProjectUrl>
 		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+        <!-- Include README in NuGet package for better package UX and symbols validation -->
+        <PackageReadmeFile>README.md</PackageReadmeFile>
 		<!-- set true if you want dotnet build to create package -->
 	</PropertyGroup>
 	

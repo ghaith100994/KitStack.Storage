@@ -71,7 +71,6 @@ jobs:
           echo "Packing version: $VERSION"
           dotnet pack src/KitStack.AspNetCore/KitStack.AspNetCore.csproj \
             -c Release -o ./nupkg \
-            --no-build \
             /p:Version=$VERSION \
             /p:IncludeSymbols=true \
             /p:SymbolPackageFormat=snupkg
