@@ -84,6 +84,15 @@ public class LocalFileStorageManager : IFileStorageManager
     }
 
 
+    public async Task<IFileEntry> CreateAsync<T>(T entity, IFormFile file, string? category, CancellationToken cancellationToken = default)
+        where T : class, IFileAttachable
+    {
+        var primary = await CreateAsync<T>(file, category, cancellationToken).ConfigureAwait(false);
+
+        entity.AddFileAttachment(primary);
+        return primary;
+    }
+
     /// <summary>
     /// Create and store the primary file and image variants as configured.
     /// Returns the primary FileEntry and a list of FileEntry objects for variants that were created.
@@ -106,10 +115,12 @@ public class LocalFileStorageManager : IFileStorageManager
         await stream.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
         var bytes = ms.ToArray();
 
+        var relativeFolderPath = Path.GetDirectoryName(primary.FileLocation) ?? string.Empty;
+        var uplaodFolderPath =  Path.Combine(_basePath, relativeFolderPath);
         // Compressed variant
         if (_option.ImageProcessing.CreateCompressed)
         {
-            var compressedRelative = await CreateCompressedVariantAsync(bytes, Path.Combine(_basePath, Path.GetDirectoryName(primary.FileLocation) ?? string.Empty), Path.GetDirectoryName(primary.FileLocation) ?? string.Empty, new Guid(primary.Id.ToString()), cancellationToken).ConfigureAwait(false);
+            var compressedRelative = await CreateCompressedVariantAsync(bytes, uplaodFolderPath, relativeFolderPath, new Guid(primary.Id.ToString()), cancellationToken).ConfigureAwait(false);
             var compressedEntry = BuildVariantFileEntry(compressedRelative);
             compressedEntry.Metadata ??= new Dictionary<string, string>();
             compressedEntry.VariantType = "compressed";
@@ -123,7 +134,7 @@ public class LocalFileStorageManager : IFileStorageManager
         // Thumbnail variant
         if (_option.ImageProcessing.CreateThumbnail)
         {
-            var thumbRelative = await CreateThumbnailVariantAsync(bytes, Path.Combine(_basePath, Path.GetDirectoryName(primary.FileLocation) ?? string.Empty), Path.GetDirectoryName(primary.FileLocation) ?? string.Empty, new Guid(primary.Id.ToString()), cancellationToken).ConfigureAwait(false);
+            var thumbRelative = await CreateThumbnailVariantAsync(bytes, uplaodFolderPath, relativeFolderPath, new Guid(primary.Id.ToString()), cancellationToken).ConfigureAwait(false);
             var thumbEntry = BuildVariantFileEntry(thumbRelative);
             thumbEntry.Metadata ??= new Dictionary<string, string>();
             thumbEntry.VariantType = "thumbnail";
@@ -137,8 +148,7 @@ public class LocalFileStorageManager : IFileStorageManager
         // Additional sizes
         if (_option.ImageProcessing.AdditionalSizes != null && _option.ImageProcessing.AdditionalSizes.Length > 0)
         {
-            var uplaodFolder = Path.Combine(_basePath, Path.GetDirectoryName(primary.FileLocation) ?? string.Empty);
-            var variantPaths = await CreateAdditionalVariantsAsync(bytes, uplaodFolder, Path.GetDirectoryName(primary.FileLocation) ?? string.Empty, _option.ImageProcessing.AdditionalSizes, cancellationToken).ConfigureAwait(false);
+            var variantPaths = await CreateAdditionalVariantsAsync(bytes, uplaodFolderPath, relativeFolderPath, _option.ImageProcessing.AdditionalSizes, cancellationToken).ConfigureAwait(false);
             var variantEntries = variantPaths.Select(p =>
             {
                 var ve = BuildVariantFileEntry(p);

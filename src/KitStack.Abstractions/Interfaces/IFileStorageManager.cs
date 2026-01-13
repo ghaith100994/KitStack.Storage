@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using KitStack.Abstractions.Models;
+using Microsoft.AspNetCore.Http;
 
 namespace KitStack.Abstractions.Interfaces;
 
@@ -9,55 +10,43 @@ namespace KitStack.Abstractions.Interfaces;
 public interface IFileStorageManager
 {
     /// <summary>
-    /// Create / upload content for the given file entry.
+    /// Create and store a file for the specified entity type <typeparamref name="T"/>.
+    /// The implementation should produce a populated <see cref="IFileEntry"/> describing
+    /// the stored primary/original file. Providers may also create image variants according
+    /// to their configuration but this method returns the primary entry only.
     /// </summary>
-    //Task CreateAsync(IFileEntry fileEntry, Stream content, CancellationToken cancellationToken = default);
-
-    ///// <summary>
-    ///// Read the file content into a byte array.
-    ///// </summary>
-    //Task<byte[]> ReadAsync(IFileEntry fileEntry, CancellationToken cancellationToken = default);
-
-    ///// <summary>
-    ///// Open a read stream for the file content.
-    ///// Caller is responsible for disposing the returned stream.
-    ///// </summary>
-    //Task<Stream> ReadAsStreamAsync(IFileEntry fileEntry, CancellationToken cancellationToken = default);
-
-    ///// <summary>
-    ///// Delete the file referenced by fileEntry.
-    ///// </summary>
-    //Task DeleteAsync(IFileEntry fileEntry, CancellationToken cancellationToken = default);
-
-    ///// <summary>
-    ///// Mark or move the file into archive tier (provider-defined).
-    ///// </summary>
-    //Task ArchiveAsync(IFileEntry fileEntry, CancellationToken cancellationToken = default);
-
-    ///// <summary>
-    ///// Restore the file from archive tier (provider-defined).
-    ///// </summary>
-    //Task UnArchiveAsync(IFileEntry fileEntry, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// High-level convenience: upload an IFormFile for entity T into the configured local store.
-    /// If the file is an image and image-processing options are enabled, the manager will create
-    /// variants (thumbnail, compressed, additional sizes) according to configuration.
-    /// Returns the provider-relative path of the primary stored file (suitable for storing in DB).
-    /// </summary>
-    //Task<string> UploadAsync<T>(IFormFile? file, string? category, CancellationToken cancellationToken = default)
-    //    where T : class;
-
-    /// <summary>
-    /// High-level helper: create and store a file associated with the given entity.
-    /// Returns a populated IFileEntry describing the stored file (primary/original).
-    /// - The implementation SHOULD NOT mutate the entity by default, but if the entity exposes
-    ///   a compatible method (e.g. AddFileAttachment(FileEntry)) the provider MAY call it.
-    /// - Image variants (thumbnail/compressed/other sizes) are created according to provider options.
-    /// </summary>
+    /// <typeparam name="T">Entity type the file is associated with.</typeparam>
+    /// <param name="file">The uploaded form file to store.</param>
+    /// <param name="category">Logical category or module name used to organize storage (required).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that resolves to the stored <see cref="IFileEntry"/>.</returns>
     Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
         where T : class;
 
+    /// <summary>
+    /// Create and store a file associated with the provided entity instance.
+    /// Implementations may attach or mutate the entity (for example adding a FileEntry)
+    /// when the entity implements <see cref="IFileAttachable"/>.
+    /// </summary>
+    /// <typeparam name="T">Entity type which implements <see cref="IFileAttachable"/>.</typeparam>
+    /// <param name="entity">The entity instance to associate the file with.</param>
+    /// <param name="file">The uploaded form file to store.</param>
+    /// <param name="category">Logical category or module name used to organize storage (required).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that resolves to the stored <see cref="IFileEntry"/>.</returns>
+    Task<IFileEntry> CreateAsync<T>(T entity, IFormFile file, string? category, CancellationToken cancellationToken = default)
+        where T : class, IFileAttachable;
+
+    /// <summary>
+    /// Create the primary/original file and any configured image variants (thumbnail, compressed,
+    /// or additional sizes). Returns the primary <see cref="IFileEntry"/> and a list of variant
+    /// entries that were created by the provider.
+    /// </summary>
+    /// <typeparam name="T">Entity type the file is associated with.</typeparam>
+    /// <param name="file">The uploaded form file to store.</param>
+    /// <param name="category">Logical category or module name used to organize storage (required).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that resolves to a tuple containing the primary entry and created variants.</returns>
     Task<(IFileEntry Primary, List<IFileEntry> Variants)> CreateWithVariantsAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
     where T : class;
 }
