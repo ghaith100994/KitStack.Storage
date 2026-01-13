@@ -6,6 +6,13 @@
     <!-- update for each release, or set from CI -->
     <Authors>ghaith100994</Authors>
     <Company>KitStack</Company>
+    <Description>Local filesystem storage provider for KitStack.Storage (file storage, image variants, health checks).</Description>
+    <PackageTags>kitstack storage local filesystem images healthchecks</PackageTags>
+    <RepositoryUrl>https://github.com/ghaith100994/KitStack.Storage</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <IncludeReferencedProjects>true</IncludeReferencedProjects>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storageo</PackageProjectUrl>
   </PropertyGroup>
   
   <ItemGroup>

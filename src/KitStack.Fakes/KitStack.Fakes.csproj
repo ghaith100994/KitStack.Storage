@@ -6,6 +6,15 @@
     <!-- update for each release, or set from CI -->
     <Authors>ghaith100994</Authors>
     <Company>KitStack</Company>
+
+    <Description>In-memory fake storage provider for KitStack.Storage used for tests and local development.</Description>
+    <PackageTags>kitstack storage fake in-memory testing</PackageTags>
+    <RepositoryUrl>https://github.com/ghaith100994/KitStack.Storage</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <IncludeReferencedProjects>true</IncludeReferencedProjects>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storageo</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   
 	<ItemGroup>

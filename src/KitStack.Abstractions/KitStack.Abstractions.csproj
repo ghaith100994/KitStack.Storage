@@ -6,7 +6,19 @@
     <!-- update for each release, or set from CI -->
     <Authors>ghaith100994</Authors>
     <Company>KitStack</Company>
+
+    <Description>Lightweight storage interfaces, models and utilities for KitStack.Storage.</Description>
+    <PackageTags>kitstack storage abstractions models utilities</PackageTags>
+    <RepositoryUrl>https://github.com/ghaith100994/KitStack.Storage</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storageo</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
 
   
   <ItemGroup>

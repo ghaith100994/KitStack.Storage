@@ -3,7 +3,6 @@
 	<PropertyGroup>
 		<!-- Package metadata -->
 		<PackageId>KitStack.AspNetCore</PackageId>
-		<!-- update for each release, or set from CI -->
 		<Authors>ghaith100994</Authors>
 		<Company>KitStack</Company>
 		<Description>KitStack ASP.NET Core integration helpers for KitStack storage providers.</Description>
@@ -14,17 +13,7 @@
 		<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
 		<PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storageo</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-		<!-- set true if you want dotnet build to create package -->
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-
-    <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeReferencedProjectInPackage</TargetsForTfmSpecificBuildOutput>
   </PropertyGroup>
-
-  <Target Name="IncludeReferencedProjectInPackage" DependsOnTargets="BuildOnlySettings;ResolveReferences">
-    <ItemGroup>
-      <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths->WithMetadataValue('ReferenceSourceTarget', 'ProjectReference'))" />
-    </ItemGroup>
-  </Target>
 
 	<ItemGroup>
 		<None Include="README.md" Pack="true" PackagePath="" />
@@ -37,15 +26,8 @@
 	</ItemGroup>
 	
 	<ItemGroup>
-    <ProjectReference Include="..\KitStack.Abstractions\KitStack.Abstractions.csproj">
-      <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
-      <PrivateAssets>all</PrivateAssets>
-    </ProjectReference>
-    <ProjectReference Include="..\KitStack.Fakes\KitStack.Fakes.csproj">
-      <PrivateAssets>all</PrivateAssets>
-    </ProjectReference>
-    <ProjectReference Include="..\KitStack.Storage.Local\KitStack.Storage.Local.csproj">
-      <PrivateAssets>all</PrivateAssets>
-    </ProjectReference>
+    <ProjectReference Include="..\KitStack.Abstractions\KitStack.Abstractions.csproj"/>
+    <ProjectReference Include="..\KitStack.Fakes\KitStack.Fakes.csproj"/>
+    <ProjectReference Include="..\KitStack.Storage.Local\KitStack.Storage.Local.csproj"/>
 	</ItemGroup>
 </Project>
