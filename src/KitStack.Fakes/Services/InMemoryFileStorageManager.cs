@@ -55,6 +55,8 @@ public class InMemoryFileStorageManager(IOptions<FakeOptions>? options = null) :
             ContentType = file.ContentType,
             UploadedTime = DateTime.UtcNow,
             FileExtension = extension,
+            Encrypted = false,
+            Category = category,
             Metadata = new Dictionary<string, string>()
         };
 
@@ -142,6 +144,8 @@ public class InMemoryFileStorageManager(IOptions<FakeOptions>? options = null) :
 
             var compEntry = BuildVariantFileEntryInMemory(compressedRelative, compBytes);
             compEntry.VariantType = "compressed";
+            compEntry.Category = category;
+            compEntry.Encrypted = false;
             variants.Add(compEntry);
 
             // store
@@ -164,6 +168,8 @@ public class InMemoryFileStorageManager(IOptions<FakeOptions>? options = null) :
             var thumbRelative = Path.Combine(relativeDir, "thumbnails", $"{primary.Id:N}.jpg").Replace('\\', '/');
             var thumbEntry = BuildVariantFileEntryInMemory(thumbRelative, thumbBytes);
             thumbEntry.VariantType = "thumbnail";
+            thumbEntry.Category = category;
+            thumbEntry.Encrypted = false;
 
             variants.Add(thumbEntry);
 

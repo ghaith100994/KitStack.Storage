@@ -61,6 +61,8 @@ public class LocalFileStorageManager : IFileStorageManager
             ContentType = file.ContentType,
             UploadedTime = DateTime.UtcNow,
             FileExtension = extension,
+            Category = category,
+            Encrypted = false,  
         };
 
         fileEntry.Metadata ??= new Dictionary<string, string>();
@@ -124,6 +126,8 @@ public class LocalFileStorageManager : IFileStorageManager
             var compressedEntry = BuildVariantFileEntry(compressedRelative);
             compressedEntry.Metadata ??= new Dictionary<string, string>();
             compressedEntry.VariantType = "compressed";
+            compressedEntry.Category = category;
+            compressedEntry.Encrypted = false;
             variants.Add(compressedEntry);
 
             // Also add reference in primary metadata
@@ -138,6 +142,8 @@ public class LocalFileStorageManager : IFileStorageManager
             var thumbEntry = BuildVariantFileEntry(thumbRelative);
             thumbEntry.Metadata ??= new Dictionary<string, string>();
             thumbEntry.VariantType = "thumbnail";
+            thumbEntry.Category = category;
+            thumbEntry.Encrypted = false;
 
             variants.Add(thumbEntry);
 
@@ -153,6 +159,8 @@ public class LocalFileStorageManager : IFileStorageManager
             {
                 var ve = BuildVariantFileEntry(p);
                 ve.Metadata ??= new Dictionary<string, string>();
+                ve.Category = category;
+                ve.Encrypted = false;
                 return ve;
             }).ToList();
 

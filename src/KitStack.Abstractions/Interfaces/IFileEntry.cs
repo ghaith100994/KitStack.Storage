@@ -9,46 +9,62 @@ namespace KitStack.Abstractions.Interfaces;
 /// </summary>
 public interface IFileEntry
 {
+    /// <summary>
+    /// Identifier for the file entry. The concrete type is provider/application-specific.
+    /// </summary>
     DefaultIdType Id { get; set; }
 
     /// <summary>
-    /// Original file name (including extension).
+    /// Original file name including extension (for example "photo.jpg").
     /// </summary>
     string FileName { get; set; }
 
     /// <summary>
-    /// Logical or provider-specific file location / key (for example: "app/images/..." or S3 key).
+    /// Logical or provider-specific location/key for the stored file (for example "app/images/2026/photo.jpg" or an S3 key).
+    /// This value is intended to be persisted by callers and used to retrieve the file from the provider.
     /// </summary>
     string FileLocation { get; set; }
 
     /// <summary>
-    /// Size in bytes.
+    /// Optional logical category or module name used to group files (for example "Users" or "Products").
+    /// Providers may use this value to organize storage layout.
+    /// </summary>
+    string? Category { get; set; }
+
+    /// <summary>
+    /// Size of the file in bytes.
     /// </summary>
     long Size { get; set; }
 
     /// <summary>
-    /// Optional MIME/content type.
+    /// Optional MIME/content type (for example "image/jpeg").
     /// </summary>
     string? ContentType { get; set; }
 
     /// <summary>
-    /// Optional FileExtension.
+    /// Optional file extension including the leading dot (for example ".jpg").
     /// </summary>
     string? FileExtension { get; set; }
 
     /// <summary>
-    /// Additional metadata (provider-agnostic).
+    /// Provider-agnostic key/value metadata attached to this file.
+    /// Providers may store additional information such as variant paths here.
     /// </summary>
     IDictionary<string, string>? Metadata { get; set; }
 
     /// <summary>
-    /// When the file was uploaded.
+    /// When the file was uploaded (UTC).
     /// </summary>
     DateTimeOffset UploadedTime { get; set; }
 
     /// <summary>
-    /// Optional variant classification for this entry (e.g. "original", "thumbnail", "compressed", "small", etc.).
-    /// Providers should set this for variant files to make it easy to query / display.
+    /// Optional variant classification for this entry (for example "original", "thumbnail", "compressed", "small").
+    /// Providers should set this for variant files to make querying and display easier.
     /// </summary>
     string? VariantType { get; set; }
+
+    /// <summary>
+    /// Indicates whether the file content is stored encrypted by the provider.
+    /// </summary>
+    bool Encrypted { get; set; }
 }

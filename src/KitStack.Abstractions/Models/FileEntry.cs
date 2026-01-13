@@ -16,6 +16,8 @@ public class FileEntry : IFileEntry
 
     public string FileLocation { get; set; } = string.Empty;
 
+    public string? Category { get; set; } = string.Empty;
+
     public long Size { get; set; }
 
     public string? ContentType { get; set; }
@@ -27,4 +29,6 @@ public class FileEntry : IFileEntry
     public DateTimeOffset UploadedTime { get; set; } = DateTimeOffset.UtcNow;
 
     public string? VariantType { get; set; }
+
+    public bool Encrypted { get; set; }
 }
