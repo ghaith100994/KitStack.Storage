@@ -16,6 +16,10 @@
     <PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storageo</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
   
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Extensions.Options" />
