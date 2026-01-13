@@ -6,7 +6,7 @@
 
 		<!-- Package metadata -->
 		<PackageId>KitStack.AspNetCore</PackageId>
-		<Version>0.1.0</Version>
+		<Version>0.1.2</Version>
 		<!-- update for each release, or set from CI -->
 		<Authors>ghaith100994</Authors>
 		<Company>KitStack</Company>
@@ -14,13 +14,13 @@
 		<PackageTags>kitstack storage aspnetcore</PackageTags>
 		<RepositoryUrl>https://github.com/ghaith100994/KitStack.Storage</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
+    <IncludeReferencedProjects>true</IncludeReferencedProjects>
 		<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
 		<PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storageo</PackageProjectUrl>
-		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-        <!-- Include README in NuGet package for better package UX and symbols validation -->
-        <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
 		<!-- set true if you want dotnet build to create package -->
-	</PropertyGroup>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+  </PropertyGroup>
 
 	<ItemGroup>
 		<None Include="README.md" Pack="true" PackagePath="" />
