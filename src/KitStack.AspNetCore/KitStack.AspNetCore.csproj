@@ -21,6 +21,10 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
 		<!-- set true if you want dotnet build to create package -->
 	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="README.md" Pack="true" PackagePath="" />
+	</ItemGroup>
 	
 	
 	<ItemGroup>
