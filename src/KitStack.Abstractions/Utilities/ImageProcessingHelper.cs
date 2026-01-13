@@ -52,6 +52,8 @@ namespace KitStack.Abstractions.Utilities
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxWidth);
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxHeight);
+            ArgumentNullException.ThrowIfNull(sourceStream);
+            ArgumentNullException.ThrowIfNull(destinationStream);
 
             // Rewind if possible (so callers can reuse the same stream)
             if (sourceStream.CanSeek)

@@ -5,8 +5,6 @@ using KitStack.Storage.Local.Options;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Collections.Generic;
 
 namespace KitStack.Storage.Local.Services;
 
@@ -47,7 +45,7 @@ public class LocalFileStorageManager : IFileStorageManager
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
         var entityName = typeof(T).Name;
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            entityName = entityName.Replace(@"\", "/");
+            entityName = entityName.Replace(@"\", "/", StringComparison.OrdinalIgnoreCase);
 
         var typeFolder = ImageProcessingHelper.GetFileTypeFolder(extension);
         var relativeFolderPath = Path.Combine(category, entityName, typeFolder);
@@ -82,9 +80,6 @@ public class LocalFileStorageManager : IFileStorageManager
         // Provider-relative path (URL-safe)
         fileEntry.FileLocation = Path.Combine(relativeFolderPath, fileName).Replace('\\', '/');
 
-        // Best-effort metadata for entity id if available (non-invasive)
-        TryAttachEntityMetadata(entityName, null, fileEntry);
-
         return fileEntry;
     }
 
@@ -117,7 +112,7 @@ public class LocalFileStorageManager : IFileStorageManager
             var compressedRelative = await CreateCompressedVariantAsync(bytes, Path.Combine(_basePath, Path.GetDirectoryName(primary.FileLocation) ?? string.Empty), Path.GetDirectoryName(primary.FileLocation) ?? string.Empty, new Guid(primary.Id.ToString()), cancellationToken).ConfigureAwait(false);
             var compressedEntry = BuildVariantFileEntry(compressedRelative);
             compressedEntry.Metadata ??= new Dictionary<string, string>();
-            compressedEntry.Metadata["VariantType"] = "compressed";
+            compressedEntry.VariantType = "compressed";
             variants.Add(compressedEntry);
 
             // Also add reference in primary metadata
@@ -131,6 +126,8 @@ public class LocalFileStorageManager : IFileStorageManager
             var thumbRelative = await CreateThumbnailVariantAsync(bytes, Path.Combine(_basePath, Path.GetDirectoryName(primary.FileLocation) ?? string.Empty), Path.GetDirectoryName(primary.FileLocation) ?? string.Empty, new Guid(primary.Id.ToString()), cancellationToken).ConfigureAwait(false);
             var thumbEntry = BuildVariantFileEntry(thumbRelative);
             thumbEntry.Metadata ??= new Dictionary<string, string>();
+            thumbEntry.VariantType = "thumbnail";
+
             variants.Add(thumbEntry);
 
             primary.Metadata ??= new Dictionary<string, string>();
@@ -159,14 +156,6 @@ public class LocalFileStorageManager : IFileStorageManager
         }
 
         return (primary, variants);
-    }
-
-
-    // Helper: best-effort attach entity metadata (if entity has Id property). Here entity is null in this API,
-    // but method preserved for reuse; left minimal.
-    private void TryAttachEntityMetadata(string entityName, object? entity, IFileEntry fileEntry)
-    {
-        // No-op here; kept as extension point. If caller provides entity overload, populate metadata.
     }
 
     private async Task<string> CreateCompressedVariantAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, Guid fileId, CancellationToken cancellationToken)
@@ -219,7 +208,7 @@ public class LocalFileStorageManager : IFileStorageManager
         return Path.Combine(relativeFolderPath, "thumbnails", $"{fileId:N}.jpg").Replace('\\', '/');
     }
 
-    private async Task<List<string>> CreateAdditionalVariantsAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, ImageSizeOption[] sizes, CancellationToken cancellationToken)
+    private async static Task<List<string>> CreateAdditionalVariantsAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, ImageSizeOption[] sizes, CancellationToken cancellationToken)
     {
         var variants = new List<string>();
 
@@ -251,7 +240,7 @@ public class LocalFileStorageManager : IFileStorageManager
         return variants;
     }
 
-    private IFileEntry BuildVariantFileEntry(string relativePath)
+    private FileEntry BuildVariantFileEntry(string relativePath)
     {
         // relativePath is provider-relative (e.g. "Module/Entity/Images/thumbnails/abcd.jpg")
         var full = GetFullPathFromRelative(relativePath);

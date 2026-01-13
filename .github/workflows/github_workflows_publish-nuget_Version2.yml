@@ -1,0 +1,108 @@
+# Packs and publishes KitStack.AspNetCore to nuget.org when a tag like v1.2.3 is pushed.
+# Improvements over the original:
+# - Uses dotnet 10 SDK (matches net10.0)
+# - Adds NuGet cache to speed restores
+# - Runs tests (if present)
+# - Produces symbol package (snupkg)
+# - Pushes both nupkg and snupkg and uses --skip-duplicate
+# - Adds concurrency to avoid duplicate runs for the same tag
+# - Uses a robust tag -> version extraction
+on:
+  push:
+    tags:
+      - 'v*' # triggers for tags like v1.0.0
+
+concurrency:
+  group: publish-nuget-${{ github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Test
+        # If you don't have tests, this step will be a no-op; adjust or remove as needed.
+        run: |
+          if [ -f "./tests" ] || dotnet test --list-tests >/dev/null 2>&1; then
+            dotnet test --no-build -c Release
+          else
+            echo "No test projects detected, skipping tests."
+          fi
+        continue-on-error: false
+
+      - name: Pack (create nupkg + snupkg)
+        env:
+          TAG: ${{ github.ref_name }}   # e.g., v1.0.0
+        run: |
+          # Extract version from tag (supports tags like v1.2.3 or 1.2.3)
+          if [[ "${TAG}" == refs/tags/* ]]; then
+            RAW=${TAG#refs/tags/}
+          else
+            RAW=${TAG}
+          fi
+          VERSION=${RAW#v}
+          echo "Packing version: $VERSION"
+          dotnet pack src/KitStack.AspNetCore/KitStack.AspNetCore.csproj \
+            -c Release -o ./nupkg \
+            --no-build \
+            /p:Version=$VERSION \
+            /p:IncludeSymbols=true \
+            /p:SymbolPackageFormat=snupkg
+
+      - name: List package files
+        run: ls -la ./nupkg || true
+
+      - name: Publish to NuGet
+        if: env.NUGET_API_KEY != ''
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          set -e
+          echo "Pushing packages to nuget.org"
+          # push nupkg
+          for pkg in ./nupkg/*.nupkg; do
+            if [[ "$pkg" == *".symbols.nupkg" ]]; then
+              # skip legacy symbol packages if present, we publish snupkg separately
+              continue
+            fi
+            echo "Pushing $pkg"
+            dotnet nuget push "$pkg" -k "$NUGET_API_KEY" -s https://api.nuget.org/v3/index.json --skip-duplicate
+          done
+          # push symbol package (snupkg) if produced
+          for sym in ./nupkg/*.snupkg; do
+            echo "Pushing symbol package $sym"
+            dotnet nuget push "$sym" -k "$NUGET_API_KEY" -s https://api.nuget.org/v3/index.json --skip-duplicate
+          done
+
+      - name: Upload built packages as workflow artifacts (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: kitstack-packages-${{ github.ref_name }}
+          path: ./nupkg

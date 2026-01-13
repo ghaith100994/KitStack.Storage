@@ -36,8 +36,6 @@ public interface IFileEntry
     /// </summary>
     string? FileExtension { get; set; }
 
-
-
     /// <summary>
     /// Additional metadata (provider-agnostic).
     /// </summary>
@@ -53,5 +51,4 @@ public interface IFileEntry
     /// Providers should set this for variant files to make it easy to query / display.
     /// </summary>
     string? VariantType { get; set; }
-
 }
