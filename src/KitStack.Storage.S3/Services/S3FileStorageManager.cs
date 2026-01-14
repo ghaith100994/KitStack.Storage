@@ -4,6 +4,8 @@ using Amazon.S3;
 using Amazon.S3.Model;
 using Amazon.S3.Transfer;
 using Amazon.S3.Util;
+using KitStack.Abstractions.Exceptions;
+using KitStack.Abstractions.Extensions;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Abstractions.Models;
 using KitStack.Abstractions.Utilities;
@@ -23,8 +25,8 @@ public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
 
     public S3FileStorageManager(S3Options options)
     {
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _mainTarget = options.MainTarget ?? throw new ArgumentException("S3Options.MainTarget must be configured and include a BucketName.");
+        _options = options;
+        _mainTarget = options.MainTarget;
 
         // Create main client using credentials from target or options or default credential chain
         _client = CreateClientForTarget(_mainTarget);
@@ -33,8 +35,8 @@ public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
     public async Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default) where T : class
     {
         ArgumentNullException.ThrowIfNull(file);
-        if (string.IsNullOrWhiteSpace(category)) 
-            throw new ArgumentException("Category required", nameof(category));
+        if (string.IsNullOrWhiteSpace(category))
+            throw new StorageValidationException("Category required");
 
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
         var entityName = typeof(T).Name;
@@ -46,13 +48,16 @@ public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
         {
             Id = Guid.NewGuid(),
             FileName = Path.GetFileName(file.FileName),
+            OriginalFileName = file.FileName,
             Size = file.Length,
             ContentType = file.ContentType,
             UploadedTime = DateTime.UtcNow,
             FileExtension = extension,
             Category = category,
             Encrypted = false,
-            VariantType = "original"
+            VariantType = "original",
+            StorageProvider = "S3",
+            LastAccessedTime = DateTimeOffset.UtcNow,
         };
 
         using var ms = new MemoryStream();
@@ -76,6 +81,7 @@ public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
     {
         var primary = await CreateAsync<T>(file, category, cancellationToken).ConfigureAwait(false);
         entity.AddFileAttachment(primary);
+        primary.LinkToEntity(entity, category ?? typeof(T).Name);
         return primary;
     }
 
@@ -129,8 +135,12 @@ public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
                 VariantType = "compressed",
                 Category = category,
                 Encrypted = false,
-                FileExtension = extension
+                FileExtension = extension,
+                OriginalFileName = Path.GetFileName(file.FileName),
+                StorageProvider = "S3",
+                LastAccessedTime = DateTimeOffset.UtcNow,
             };
+            item.CopyRelationsFrom(primary);
             variants.Add(item);
         }
 
@@ -171,8 +181,12 @@ public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
                 VariantType = "thumbnail",
                 Category = category,
                 FileExtension = extension,
-                Encrypted = false
+                Encrypted = false,
+                OriginalFileName = Path.GetFileName(file.FileName),
+                StorageProvider = "S3",
+                LastAccessedTime = DateTimeOffset.UtcNow,
             };
+            item.CopyRelationsFrom(primary);
             variants.Add(item);
         }
 
@@ -213,7 +227,11 @@ public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
                     Category = category,
                     FileExtension = extension,
                     Encrypted = false,
+                    OriginalFileName = Path.GetFileName(file.FileName),
+                    StorageProvider = "S3",
+                    LastAccessedTime = DateTimeOffset.UtcNow,
                 };
+                item.CopyRelationsFrom(primary);
                 variants.Add(item);
             }
         }

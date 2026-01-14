@@ -1,4 +1,6 @@
 ﻿using System.Collections.Concurrent;
+using KitStack.Abstractions.Exceptions;
+using KitStack.Abstractions.Extensions;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Abstractions.Models;
 using KitStack.Abstractions.Utilities;
@@ -35,7 +37,8 @@ public class InMemoryFileStorageManager(IOptions<FakeOptions>? options = null) :
     {
         ArgumentNullException.ThrowIfNull(file);
 
-        if (string.IsNullOrWhiteSpace(category)) throw new ArgumentException("Category is required.", nameof(category));
+        if (string.IsNullOrWhiteSpace(category)) 
+            throw new StorageValidationException("Category is required.");
 
         await SimulateDelayAsync(cancellationToken).ConfigureAwait(false);
 
@@ -51,13 +54,17 @@ public class InMemoryFileStorageManager(IOptions<FakeOptions>? options = null) :
         {
             Id = Guid.NewGuid(),
             FileName = Path.GetFileName(file.FileName),
+            OriginalFileName = file.FileName,
             Size = file.Length,
             ContentType = file.ContentType,
-            UploadedTime = DateTime.UtcNow,
+            UploadedTime = DateTimeOffset.UtcNow,
             FileExtension = extension,
             Encrypted = false,
             Category = category,
-            Metadata = new Dictionary<string, string>()
+            Metadata = new Dictionary<string, string>(),
+            StorageProvider = "Fake",
+            VariantType = "original",
+            LastAccessedTime = DateTimeOffset.UtcNow,
         };
 
         // Sanitize original file name and build provider-relative location similar to LocalFileStorageManager
@@ -95,6 +102,7 @@ public class InMemoryFileStorageManager(IOptions<FakeOptions>? options = null) :
         var primary = await CreateAsync<T>(file, category, cancellationToken).ConfigureAwait(false);
 
         entity.AddFileAttachment(primary);
+        primary.LinkToEntity(entity, category ?? typeof(T).Name);
         return primary;
     }
 
@@ -143,6 +151,7 @@ public class InMemoryFileStorageManager(IOptions<FakeOptions>? options = null) :
             var compressedRelative = Path.Combine(relativeDir, "compressed", $"{primary.Id:N}.jpg").Replace('\\', '/');
 
             var compEntry = BuildVariantFileEntryInMemory(compressedRelative, compBytes);
+            compEntry.CopyRelationsFrom(primary);
             compEntry.VariantType = "compressed";
             compEntry.Category = category;
             compEntry.Encrypted = false;
@@ -167,6 +176,7 @@ public class InMemoryFileStorageManager(IOptions<FakeOptions>? options = null) :
             var relativeDir = Path.GetDirectoryName(primary.FileLocation) ?? string.Empty;
             var thumbRelative = Path.Combine(relativeDir, "thumbnails", $"{primary.Id:N}.jpg").Replace('\\', '/');
             var thumbEntry = BuildVariantFileEntryInMemory(thumbRelative, thumbBytes);
+            thumbEntry.CopyRelationsFrom(primary);
             thumbEntry.VariantType = "thumbnail";
             thumbEntry.Category = category;
             thumbEntry.Encrypted = false;
@@ -203,8 +213,11 @@ public class InMemoryFileStorageManager(IOptions<FakeOptions>? options = null) :
             FileLocation = relativePath,
             Size = content?.LongLength ?? 0,
             ContentType = "image/jpeg",
-            UploadedTime = DateTime.UtcNow,
+            UploadedTime = DateTimeOffset.UtcNow,
             VariantType = variantType,
+            OriginalFileName = Path.GetFileName(relativePath),
+            StorageProvider = "Fake",
+            LastAccessedTime = DateTimeOffset.UtcNow,
         };
 
         return entry;

@@ -26,7 +26,8 @@ public interface IFileStorageManager
     /// <summary>
     /// Create and store a file associated with the provided entity instance.
     /// Implementations may attach or mutate the entity (for example adding a FileEntry)
-    /// when the entity implements <see cref="IFileAttachable"/>.
+    /// when the entity implements <see cref="IFileAttachable"/>. Implementations should also
+    /// record a relationship on the returned <see cref="IFileEntry"/> via <c>RelatedEntities</c>.
     /// </summary>
     /// <typeparam name="T">Entity type which implements <see cref="IFileAttachable"/>.</typeparam>
     /// <param name="entity">The entity instance to associate the file with.</param>

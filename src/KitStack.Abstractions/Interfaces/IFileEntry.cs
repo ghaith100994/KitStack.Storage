@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using KitStack.Abstractions.Models;
 
 namespace KitStack.Abstractions.Interfaces;
 
@@ -67,4 +68,29 @@ public interface IFileEntry
     /// Indicates whether the file content is stored encrypted by the provider.
     /// </summary>
     bool Encrypted { get; set; }
+
+    /// <summary>
+    /// Original file name provided by the uploader before sanitization.
+    /// </summary>
+    string? OriginalFileName { get; set; }
+
+    /// <summary>
+    /// Logical storage provider identifier (Local, S3, etc.).
+    /// </summary>
+    string? StorageProvider { get; set; }
+
+    /// <summary>
+    /// When the file was last accessed/read.
+    /// </summary>
+    DateTimeOffset? LastAccessedTime { get; set; }
+
+    /// <summary>
+    /// Indicates whether the file has been soft-deleted.
+    /// </summary>
+    bool IsDeleted { get; set; }
+
+    /// <summary>
+    /// Optional relationships linking this file to one or more domain entities.
+    /// </summary>
+    ICollection<FileRelatedEntity>? RelatedEntities { get; set; }
 }

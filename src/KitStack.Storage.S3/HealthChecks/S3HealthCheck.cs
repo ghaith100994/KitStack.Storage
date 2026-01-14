@@ -1,4 +1,3 @@
-using System.Net.Sockets;
 using System.Text;
 using Amazon;
 using Amazon.Runtime;
@@ -17,7 +16,6 @@ public sealed class S3HealthCheck : IHealthCheck, IDisposable
 
     public S3HealthCheck(S3Options options)
     {
-        ArgumentNullException.ThrowIfNull(options);
         _options = options;
 
         var config = new AmazonS3Config();

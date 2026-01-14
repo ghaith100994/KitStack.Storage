@@ -1,6 +1,7 @@
 using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
+using KitStack.Abstractions.Exceptions;
 using KitStack.Storage.S3.Helpers;
 using KitStack.Storage.S3.Options;
 using Microsoft.Extensions.Options;
@@ -18,7 +19,7 @@ public sealed class S3PresignedUrlGenerator : IS3PresignedUrlGenerator, IDisposa
         _options = options.Value;
         if (_options.MainTarget is null)
         {
-            throw new ArgumentException("MainTarget must be configured.", nameof(options));
+            throw new StorageConfigurationException("MainTarget must be configured.");
         }
         _client = CreateClientForTarget(_options.MainTarget, out _disposed);
     }
@@ -55,7 +56,7 @@ public sealed class S3PresignedUrlGenerator : IS3PresignedUrlGenerator, IDisposa
 
     public async Task<Uri> GeneratePreSignedDownloadUrlAsync(string key, TimeSpan expires, S3TargetOptions? target)
     {
-        var t = (target ?? _options.MainTarget) ?? throw new ArgumentException("No S3 target configured.");
+        var t = (target ?? _options.MainTarget) ?? throw new StorageConfigurationException("No S3 target configured.");
         var bucket = t.BucketName ?? string.Empty;
         var finalKey = NormalizeKeyWithPrefix(t.Prefix, key);
 

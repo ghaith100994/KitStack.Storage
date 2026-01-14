@@ -1,3 +1,5 @@
+using KitStack.Abstractions.Exceptions;
+using KitStack.Abstractions.Extensions;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Abstractions.Models;
 using KitStack.Storage.Sftp.Options;
@@ -49,7 +51,7 @@ public class SftpFileStorageManager : IFileStorageManager, IDisposable
     {
         ArgumentNullException.ThrowIfNull(file);
         if (string.IsNullOrWhiteSpace(category))
-            throw new ArgumentException("Category is required.", nameof(category));
+            throw new StorageValidationException("Category is required.");
 
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
         var entityName = typeof(T).Name;
@@ -92,6 +94,7 @@ public class SftpFileStorageManager : IFileStorageManager, IDisposable
         {
             Id = id,
             FileName = Path.GetFileName(file.FileName),
+            OriginalFileName = file.FileName,
             FileLocation = remoteFilePath.TrimStart('/'),
             Size = file.Length,
             ContentType = file.ContentType,
@@ -100,6 +103,8 @@ public class SftpFileStorageManager : IFileStorageManager, IDisposable
             Encrypted = false,
             FileExtension = extension,
             VariantType = "original",
+            StorageProvider = "Sftp",
+            LastAccessedTime = DateTimeOffset.UtcNow,
         };
 
         return entry;
@@ -109,6 +114,7 @@ public class SftpFileStorageManager : IFileStorageManager, IDisposable
     {
         var primary = await CreateAsync<T>(file, category, cancellationToken).ConfigureAwait(false);
         entity.AddFileAttachment(primary);
+        primary.LinkToEntity(entity, category ?? typeof(T).Name);
         return primary;
     }
 
@@ -134,15 +140,15 @@ public class SftpFileStorageManager : IFileStorageManager, IDisposable
         var relativeFolderPath = Path.GetDirectoryName(primary.FileLocation) ?? string.Empty;
         var uploadFolder = Path.Combine(Path.GetTempPath(), "kitstack-ftp-variants", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(uploadFolder);
-
-        var fileName = $"{primary.Id:N}-{primary.FileName}{primary.FileExtension}";
+        var fileGuid = ResolveFileIdentifier(primary.Id);
 
         try
         {
             if (ip.CreateCompressed)
             {
-                var (compressedRelative, compressedSize) = await CreateCompressedVariantAsync(bytes, uploadFolder, relativeFolderPath, fileName, ip, cancellationToken).ConfigureAwait(false);
-                var compressedEntry = BuildVariantFileEntry(compressedRelative, compressedSize, "compressed", primary.FileExtension);
+                var (compressedRelative, compressedSize) = await CreateCompressedVariantAsync(bytes, uploadFolder, relativeFolderPath, fileGuid, ip, cancellationToken).ConfigureAwait(false);
+                var compressedEntry = BuildVariantFileEntry(compressedRelative, compressedSize, "compressed", primary.FileExtension, "Sftp");
+                compressedEntry.CopyRelationsFrom(primary);
                 compressedEntry.Metadata ??= new Dictionary<string, string>();
                 compressedEntry.Category = category;
                 compressedEntry.Encrypted = false;
@@ -154,8 +160,9 @@ public class SftpFileStorageManager : IFileStorageManager, IDisposable
 
             if (ip.CreateThumbnail)
             {
-                var (thumbRelative, thumbSize) = await CreateThumbnailVariantAsync(bytes, uploadFolder, relativeFolderPath, fileName, ip, cancellationToken).ConfigureAwait(false);
-                var thumbEntry = BuildVariantFileEntry(thumbRelative, thumbSize, "thumbnail", primary.FileExtension);
+                var (thumbRelative, thumbSize) = await CreateThumbnailVariantAsync(bytes, uploadFolder, relativeFolderPath, fileGuid, ip, cancellationToken).ConfigureAwait(false);
+                var thumbEntry = BuildVariantFileEntry(thumbRelative, thumbSize, "thumbnail", primary.FileExtension, "Sftp");
+                thumbEntry.CopyRelationsFrom(primary);
                 thumbEntry.Metadata ??= new Dictionary<string, string>();
                 thumbEntry.Category = category;
                 thumbEntry.Encrypted = false;
@@ -174,7 +181,8 @@ public class SftpFileStorageManager : IFileStorageManager, IDisposable
                 {
                     if (string.IsNullOrWhiteSpace(size.SizeName)) continue;
                     var (variantPath, variantSize) = await CreateAdditionalVariantAsync(bytes, uploadFolder, relativeFolderPath, size, cancellationToken).ConfigureAwait(false);
-                    var ve = BuildVariantFileEntry(variantPath, variantSize, size.SizeName, primary.FileExtension);
+                    var ve = BuildVariantFileEntry(variantPath, variantSize, size.SizeName, primary.FileExtension, "Sftp");
+                    ve.CopyRelationsFrom(primary);
                     ve.Metadata ??= new Dictionary<string, string>();
                     ve.Category = category;
                     ve.Encrypted = false;
@@ -197,7 +205,7 @@ public class SftpFileStorageManager : IFileStorageManager, IDisposable
         }
     }
 
-    private static FileEntry BuildVariantFileEntry(string relativePath, long size, string? variantType, string? fileExtension)
+    private static FileEntry BuildVariantFileEntry(string relativePath, long size, string? variantType, string? fileExtension, string storageProvider)
     {
         var entry = new FileEntry
         {
@@ -209,17 +217,21 @@ public class SftpFileStorageManager : IFileStorageManager, IDisposable
             FileExtension = fileExtension,
             UploadedTime = DateTimeOffset.UtcNow,
             VariantType = variantType,
+            StorageProvider = storageProvider,
+            OriginalFileName = Path.GetFileName(relativePath),
+            LastAccessedTime = DateTimeOffset.UtcNow,
         };
 
         return entry;
     }
 
-    private async Task<(string RelativePath, long Size)> CreateCompressedVariantAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, string fileName, ImageProcessingOptions options, CancellationToken cancellationToken)
+    private async Task<(string RelativePath, long Size)> CreateCompressedVariantAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, Guid fileId, ImageProcessingOptions options, CancellationToken cancellationToken)
     {
         var compressedFolder = Path.Combine(uploadFolder, "compressed");
         if (!Directory.Exists(compressedFolder))
             Directory.CreateDirectory(compressedFolder);
 
+        var fileName = $"{fileId:N}.jpg";
         var compressedFull = Path.Combine(compressedFolder, fileName);
 
         using var src = new MemoryStream(bytes);
@@ -244,12 +256,13 @@ public class SftpFileStorageManager : IFileStorageManager, IDisposable
         return (remoteRelative, variantSize);
     }
 
-    private async Task<(string RelativePath, long Size)> CreateThumbnailVariantAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, string fileName, ImageProcessingOptions options, CancellationToken cancellationToken)
+    private async Task<(string RelativePath, long Size)> CreateThumbnailVariantAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, Guid fileId, ImageProcessingOptions options, CancellationToken cancellationToken)
     {
         var thumbsFolder = Path.Combine(uploadFolder, "thumbnails");
         if (!Directory.Exists(thumbsFolder))
             Directory.CreateDirectory(thumbsFolder);
 
+        var fileName = $"{fileId:N}.jpg";
         var thumbFull = Path.Combine(thumbsFolder, fileName);
 
         using var src = new MemoryStream(bytes);
@@ -313,6 +326,15 @@ public class SftpFileStorageManager : IFileStorageManager, IDisposable
             return;
 
         _client.Connect();
+    }
+
+    private static Guid ResolveFileIdentifier(DefaultIdType id)
+    {
+        return id switch
+        {
+            Guid guid => guid,
+            _ => Guid.TryParse(id.ToString(), out var parsed) ? parsed : Guid.NewGuid()
+        };
     }
 
     public void Dispose()

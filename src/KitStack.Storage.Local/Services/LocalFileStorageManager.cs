@@ -1,4 +1,6 @@
-﻿using KitStack.Abstractions.Interfaces;
+﻿using KitStack.Abstractions.Exceptions;
+using KitStack.Abstractions.Extensions;
+using KitStack.Abstractions.Interfaces;
 using KitStack.Abstractions.Models;
 using KitStack.Abstractions.Utilities;
 using KitStack.Storage.Local.Options;
@@ -38,9 +40,9 @@ public class LocalFileStorageManager : IFileStorageManager
     {
         ArgumentNullException.ThrowIfNull(file);
         if (string.IsNullOrWhiteSpace(category))
-            throw new ArgumentException("Category is required.", nameof(category));
+            throw new StorageValidationException("Category is required.");
         if (string.IsNullOrWhiteSpace(_option.Path))
-            throw new InvalidOperationException("Storage path is not configured.");
+            throw new StorageConfigurationException("Storage path is not configured.");
 
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
         var entityName = typeof(T).Name;
@@ -57,12 +59,16 @@ public class LocalFileStorageManager : IFileStorageManager
         {
             Id = Guid.NewGuid(),
             FileName = Path.GetFileName(file.FileName),
+            OriginalFileName = file.FileName,
             Size = file.Length,
             ContentType = file.ContentType,
             UploadedTime = DateTime.UtcNow,
             FileExtension = extension,
             Category = category,
-            Encrypted = false,  
+            Encrypted = false,
+            StorageProvider = "Local",
+            LastAccessedTime = DateTimeOffset.UtcNow,
+            VariantType = "original",
         };
 
         fileEntry.Metadata ??= new Dictionary<string, string>();
@@ -92,6 +98,7 @@ public class LocalFileStorageManager : IFileStorageManager
         var primary = await CreateAsync<T>(file, category, cancellationToken).ConfigureAwait(false);
 
         entity.AddFileAttachment(primary);
+        primary.LinkToEntity(entity, category ?? typeof(T).Name);
         return primary;
     }
 
@@ -124,6 +131,7 @@ public class LocalFileStorageManager : IFileStorageManager
         {
             var compressedRelative = await CreateCompressedVariantAsync(bytes, uplaodFolderPath, relativeFolderPath, new Guid(primary.Id.ToString()), cancellationToken).ConfigureAwait(false);
             var compressedEntry = BuildVariantFileEntry(compressedRelative);
+            compressedEntry.CopyRelationsFrom(primary);
             compressedEntry.Metadata ??= new Dictionary<string, string>();
             compressedEntry.VariantType = "compressed";
             compressedEntry.Category = category;
@@ -140,6 +148,7 @@ public class LocalFileStorageManager : IFileStorageManager
         {
             var thumbRelative = await CreateThumbnailVariantAsync(bytes, uplaodFolderPath, relativeFolderPath, new Guid(primary.Id.ToString()), cancellationToken).ConfigureAwait(false);
             var thumbEntry = BuildVariantFileEntry(thumbRelative);
+            thumbEntry.CopyRelationsFrom(primary);
             thumbEntry.Metadata ??= new Dictionary<string, string>();
             thumbEntry.VariantType = "thumbnail";
             thumbEntry.Category = category;
@@ -158,6 +167,7 @@ public class LocalFileStorageManager : IFileStorageManager
             var variantEntries = variantPaths.Select(p =>
             {
                 var ve = BuildVariantFileEntry(p);
+                ve.CopyRelationsFrom(primary);
                 ve.Metadata ??= new Dictionary<string, string>();
                 ve.Category = category;
                 ve.Encrypted = false;
@@ -279,6 +289,9 @@ public class LocalFileStorageManager : IFileStorageManager
             ContentType = "image/jpeg",
             UploadedTime = DateTime.UtcNow,
             VariantType = variantType,
+            StorageProvider = "Local",
+            OriginalFileName = Path.GetFileName(relativePath),
+            LastAccessedTime = DateTimeOffset.UtcNow,
         };
 
         return entry;
@@ -287,7 +300,7 @@ public class LocalFileStorageManager : IFileStorageManager
     private string GetFullPathFromRelative(string relativePath)
     {
         if (string.IsNullOrWhiteSpace(relativePath))
-            throw new ArgumentException("Relative path must be provided", nameof(relativePath));
+            throw new StorageValidationException("Relative path must be provided.");
 
         // Normalize comparison strategy depending on OS
         var comparison = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -301,7 +314,7 @@ public class LocalFileStorageManager : IFileStorageManager
         {
             var absolute = Path.GetFullPath(relativePath);
             if (!absolute.StartsWith(baseFull, comparison) && !string.Equals(absolute, baseFull, comparison))
-                throw new UnauthorizedAccessException("File path escapes base storage path.");
+                throw new StorageValidationException("File path escapes base storage path.");
             return absolute;
         }
 
@@ -313,7 +326,7 @@ public class LocalFileStorageManager : IFileStorageManager
 
         // Ensure the resolved path is inside the configured base path (prevent directory traversal)
         if (!full.StartsWith(baseFull, comparison) && !string.Equals(full, baseFull, comparison))
-            throw new UnauthorizedAccessException("File path escapes base storage path.");
+            throw new StorageValidationException("File path escapes base storage path.");
 
         return full;
     }

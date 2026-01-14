@@ -29,4 +29,14 @@ public class FileEntry : IFileEntry
     public string? VariantType { get; set; }
 
     public bool Encrypted { get; set; }
+
+    public string? OriginalFileName { get; set; }
+
+    public string? StorageProvider { get; set; }
+
+    public DateTimeOffset? LastAccessedTime { get; set; } = DateTimeOffset.UtcNow;
+
+    public bool IsDeleted { get; set; }
+
+    public ICollection<FileRelatedEntity>? RelatedEntities { get; set; } = [];
 }
