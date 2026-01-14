@@ -11,7 +11,7 @@
         <AnalysisLevel>latest</AnalysisLevel>
         <AnalysisMode>All</AnalysisMode>
         <LangVersion>latest</LangVersion>
-        <Version>0.1.3</Version>
+        <Version>0.1.5</Version>
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     </PropertyGroup>
   <ItemGroup>
