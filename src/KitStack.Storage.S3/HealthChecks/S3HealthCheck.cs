@@ -1,9 +1,11 @@
+using System.Net.Sockets;
+using System.Text;
 using Amazon;
+using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Transfer;
 using KitStack.Storage.S3.Options;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using System.Text;
 
 namespace KitStack.Storage.S3.HealthChecks;
 
@@ -30,8 +32,18 @@ public sealed class S3HealthCheck : IHealthCheck, IDisposable
             config.RegionEndpoint = RegionEndpoint.GetBySystemName(_options.MainTarget.Region);
         }
 
+        var access = _options.MainTarget.AccessKeyID;
+        var secret = _options.MainTarget.SecretAccessKey;
+        if (string.IsNullOrWhiteSpace(access) || string.IsNullOrWhiteSpace(secret))
+        {
+            access = _options.AccessKeyID;
+            secret = _options.SecretAccessKey;
+        }
+
+        var creds = new BasicAWSCredentials(access, secret);
+
         // Create a client using default credentials chain; provider apps can provide credentials via environment/SDK chain
-        _client = new AmazonS3Client(config);
+        _client = new AmazonS3Client(creds, config);
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)

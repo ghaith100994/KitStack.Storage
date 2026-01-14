@@ -177,7 +177,7 @@ public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
         }
 
         // additional sizes
-        if (_options.ImageProcessing.AdditionalSizes != null && _options.ImageProcessing.AdditionalSizes.Length > 0)
+        if (_options.ImageProcessing.AdditionalSizes?.Count > 0)
         {
             foreach (var size in _options.ImageProcessing.AdditionalSizes)
             {

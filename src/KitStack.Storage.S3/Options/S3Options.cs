@@ -53,7 +53,7 @@ public class S3Options : IValidatableObject
 
             if (ImageProcessing.AdditionalSizes != null)
             {
-                for (int i = 0; i < ImageProcessing.AdditionalSizes.Length; i++)
+                for (int i = 0; i < ImageProcessing.AdditionalSizes.Count; i++)
                 {
                     var s = ImageProcessing.AdditionalSizes[i];
                     if (s == null) continue;
@@ -96,7 +96,7 @@ public class ImageProcessingOptions
     /// <summary>
     /// Additional sizes to create. Each size may specify its own target settings.
     /// </summary>
-    public ImageSizeOption[] AdditionalSizes { get; set; } = Array.Empty<ImageSizeOption>();
+    public IList<ImageSizeOption> AdditionalSizes { get; set; } = [];
 }
 
 public class ImageSizeOption

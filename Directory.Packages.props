@@ -12,6 +12,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.StaticFiles" Version="2.3.9" />
     <PackageVersion Include="Microsoft.Extensions.FileProviders.Physical" Version="10.0.2" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.2" />
+    <PackageVersion Include="FluentFTP" Version="53.0.2" />
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.2" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.2" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.2" />

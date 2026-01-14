@@ -152,7 +152,7 @@ public class LocalFileStorageManager : IFileStorageManager
         }
 
         // Additional sizes
-        if (_option.ImageProcessing.AdditionalSizes != null && _option.ImageProcessing.AdditionalSizes.Length > 0)
+        if (_option.ImageProcessing.AdditionalSizes != null && _option.ImageProcessing.AdditionalSizes.Count > 0)
         {
             var variantPaths = await CreateAdditionalVariantsAsync(bytes, uplaodFolderPath, relativeFolderPath, _option.ImageProcessing.AdditionalSizes, cancellationToken).ConfigureAwait(false);
             var variantEntries = variantPaths.Select(p =>
@@ -226,7 +226,7 @@ public class LocalFileStorageManager : IFileStorageManager
         return Path.Combine(relativeFolderPath, "thumbnails", $"{fileId:N}.jpg").Replace('\\', '/');
     }
 
-    private async static Task<List<string>> CreateAdditionalVariantsAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, ImageSizeOption[] sizes, CancellationToken cancellationToken)
+    private async static Task<List<string>> CreateAdditionalVariantsAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, IList<ImageSizeOption> sizes, CancellationToken cancellationToken)
     {
         var variants = new List<string>();
 

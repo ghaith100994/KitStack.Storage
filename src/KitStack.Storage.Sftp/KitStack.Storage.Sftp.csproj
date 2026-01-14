@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Authors>ghaith100994</Authors>
+    <Company>KitStack</Company>
+    <Description>SFTP/FTP storage provider for KitStack.Storage (file storage, health checks).</Description>
+    <PackageId>KitStack.Storage.Sftp</PackageId>
+    <PackageTags>kitstack storage sftp ftp healthchecks</PackageTags>
+    <RepositoryUrl>https://github.com/ghaith100994/KitStack.Storage</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <IncludeReferencedProjects>true</IncludeReferencedProjects>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentFTP" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KitStack.Abstractions\KitStack.Abstractions.csproj" />
+  </ItemGroup>
+</Project>
