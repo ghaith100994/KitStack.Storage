@@ -4,8 +4,8 @@ using KitStack.Abstractions.Interfaces;
 using KitStack.Abstractions.Models;
 using KitStack.Abstractions.Utilities;
 using KitStack.Storage.Local.Options;
+using KitStack.Storage.Local.Providers;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Options;
 using System.Runtime.InteropServices;
 
 namespace KitStack.Storage.Local.Services;
@@ -16,20 +16,22 @@ namespace KitStack.Storage.Local.Services;
 /// </summary>
 public class LocalFileStorageManager : IFileStorageManager
 {
-    private readonly LocalOptions _option;
+    private readonly LocalOptions _options;
     private readonly string _basePath;
+    private readonly string _providerId;
+    private readonly string _providerName;
 
-    public LocalFileStorageManager(IOptions<LocalOptions> option)
+    public LocalFileStorageManager(LocalStorageProvider provider)
     {
-        _option = option?.Value ?? throw new ArgumentNullException(nameof(option));
+        ArgumentNullException.ThrowIfNull(provider);
 
-        if (string.IsNullOrWhiteSpace(_option.Path))
-            _option.Path = Path.Combine(Directory.GetCurrentDirectory(), "Files");
+        _options = provider.Options ?? throw new StorageConfigurationException("Local provider options are not configured.");
+        _providerId = provider.Id;
+        _providerName = provider.Name;
+        _basePath = provider.EnsureBasePath();
 
-        _basePath = Path.IsPathRooted(_option.Path) ? _option.Path : Path.Combine(Directory.GetCurrentDirectory(), _option.Path);
-
-        if (_option.EnsureBasePathExists && !Directory.Exists(_basePath))
-            Directory.CreateDirectory(_basePath);
+        if (string.IsNullOrWhiteSpace(_basePath))
+            throw new StorageConfigurationException("Storage path is not configured.");
     }
 
     /// <summary>
@@ -41,7 +43,7 @@ public class LocalFileStorageManager : IFileStorageManager
         ArgumentNullException.ThrowIfNull(file);
         if (string.IsNullOrWhiteSpace(category))
             throw new StorageValidationException("Category is required.");
-        if (string.IsNullOrWhiteSpace(_option.Path))
+        if (string.IsNullOrWhiteSpace(_basePath))
             throw new StorageConfigurationException("Storage path is not configured.");
 
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
@@ -66,7 +68,8 @@ public class LocalFileStorageManager : IFileStorageManager
             FileExtension = extension,
             Category = category,
             Encrypted = false,
-            StorageProvider = "Local",
+            StorageProvider = _providerName,
+            ProviderId = _providerId,
             LastAccessedTime = DateTimeOffset.UtcNow,
             VariantType = "original",
         };
@@ -115,7 +118,7 @@ public class LocalFileStorageManager : IFileStorageManager
         var variants = new List<IFileEntry>();
 
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (!ImageProcessingHelper.IsImageExtension(extension) || _option.ImageProcessing == null)
+        if (!ImageProcessingHelper.IsImageExtension(extension) || _options.ImageProcessing == null)
             return (primary, variants); // no image-processing required
 
         // Read bytes into memory once for variant creation
@@ -127,7 +130,7 @@ public class LocalFileStorageManager : IFileStorageManager
         var relativeFolderPath = Path.GetDirectoryName(primary.FileLocation) ?? string.Empty;
         var uplaodFolderPath =  Path.Combine(_basePath, relativeFolderPath);
         // Compressed variant
-        if (_option.ImageProcessing.CreateCompressed)
+        if (_options.ImageProcessing.CreateCompressed)
         {
             var compressedRelative = await CreateCompressedVariantAsync(bytes, uplaodFolderPath, relativeFolderPath, new Guid(primary.Id.ToString()), cancellationToken).ConfigureAwait(false);
             var compressedEntry = BuildVariantFileEntry(compressedRelative);
@@ -144,7 +147,7 @@ public class LocalFileStorageManager : IFileStorageManager
         }
 
         // Thumbnail variant
-        if (_option.ImageProcessing.CreateThumbnail)
+        if (_options.ImageProcessing.CreateThumbnail)
         {
             var thumbRelative = await CreateThumbnailVariantAsync(bytes, uplaodFolderPath, relativeFolderPath, new Guid(primary.Id.ToString()), cancellationToken).ConfigureAwait(false);
             var thumbEntry = BuildVariantFileEntry(thumbRelative);
@@ -161,9 +164,9 @@ public class LocalFileStorageManager : IFileStorageManager
         }
 
         // Additional sizes
-        if (_option.ImageProcessing.AdditionalSizes != null && _option.ImageProcessing.AdditionalSizes.Count > 0)
+        if (_options.ImageProcessing.AdditionalSizes != null && _options.ImageProcessing.AdditionalSizes.Count > 0)
         {
-            var variantPaths = await CreateAdditionalVariantsAsync(bytes, uplaodFolderPath, relativeFolderPath, _option.ImageProcessing.AdditionalSizes, cancellationToken).ConfigureAwait(false);
+            var variantPaths = await CreateAdditionalVariantsAsync(bytes, uplaodFolderPath, relativeFolderPath, _options.ImageProcessing.AdditionalSizes, cancellationToken).ConfigureAwait(false);
             var variantEntries = variantPaths.Select(p =>
             {
                 var ve = BuildVariantFileEntry(p);
@@ -197,9 +200,9 @@ public class LocalFileStorageManager : IFileStorageManager
         using var src = new MemoryStream(bytes);
         await using var outStream = new MemoryStream();
         await ImageProcessingHelper.CreateResizedJpegToStreamAsync(src, outStream,
-            _option.ImageProcessing.CompressedMaxWidth,
-            _option.ImageProcessing.CompressedMaxHeight,
-            _option.ImageProcessing.JpegQuality,
+            _options.ImageProcessing.CompressedMaxWidth,
+            _options.ImageProcessing.CompressedMaxHeight,
+            _options.ImageProcessing.JpegQuality,
             cancellationToken).ConfigureAwait(false);
 
         outStream.Seek(0, SeekOrigin.Begin);
@@ -222,9 +225,9 @@ public class LocalFileStorageManager : IFileStorageManager
         using var src = new MemoryStream(bytes);
         await using var outStream = new MemoryStream();
         await ImageProcessingHelper.CreateResizedJpegToStreamAsync(src, outStream,
-            _option.ImageProcessing.ThumbnailMaxWidth,
-            _option.ImageProcessing.ThumbnailMaxHeight,
-            _option.ImageProcessing.JpegQuality,
+            _options.ImageProcessing.ThumbnailMaxWidth,
+            _options.ImageProcessing.ThumbnailMaxHeight,
+            _options.ImageProcessing.JpegQuality,
             cancellationToken).ConfigureAwait(false);
 
         outStream.Seek(0, SeekOrigin.Begin);
@@ -289,7 +292,8 @@ public class LocalFileStorageManager : IFileStorageManager
             ContentType = "image/jpeg",
             UploadedTime = DateTime.UtcNow,
             VariantType = variantType,
-            StorageProvider = "Local",
+            StorageProvider = _providerName,
+            ProviderId = _providerId,
             OriginalFileName = Path.GetFileName(relativePath),
             LastAccessedTime = DateTimeOffset.UtcNow,
         };

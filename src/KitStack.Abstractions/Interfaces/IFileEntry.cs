@@ -80,6 +80,11 @@ public interface IFileEntry
     string? StorageProvider { get; set; }
 
     /// <summary>
+    /// Unique identifier of the provider instance that stored this file.
+    /// </summary>
+    string? ProviderId { get; set; }
+
+    /// <summary>
     /// When the file was last accessed/read.
     /// </summary>
     DateTimeOffset? LastAccessedTime { get; set; }

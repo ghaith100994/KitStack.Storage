@@ -34,6 +34,8 @@ public class FileEntry : IFileEntry
 
     public string? StorageProvider { get; set; }
 
+    public string? ProviderId { get; set; }
+
     public DateTimeOffset? LastAccessedTime { get; set; } = DateTimeOffset.UtcNow;
 
     public bool IsDeleted { get; set; }
