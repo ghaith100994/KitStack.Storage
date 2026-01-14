@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using FluentFTP;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
@@ -6,6 +7,7 @@ using KitStack.Storage.Local.Options;
 using KitStack.Storage.S3.Options;
 using KitStack.Storage.S3.Helpers;
 using KitStack.Storage.S3.Services;
+using KitStack.Storage.Sftp.Options;
 
 namespace KitStack.AspNetCore.Extensions;
 
@@ -79,7 +81,49 @@ public static class ApplicationBuilderExtensions
                 }
             }
         }
+        else if (provider.Equals("Sftp", StringComparison.OrdinalIgnoreCase))
+        {
+            var sftpOptions = configuration.GetSection("Storage:Sftp").Get<SftpOptions>();
+            if (sftpOptions != null)
+            {
+                EnsureSftpRemotePath(sftpOptions, cancellationToken);
+            }
+        }
 
         return app;
+    }
+
+    private static void EnsureSftpRemotePath(SftpOptions options, CancellationToken cancellationToken)
+    {
+        if (options == null || !options.EnsureRemotePathExists)
+            return;
+
+        var remoteBase = string.IsNullOrWhiteSpace(options.RemotePath) ? "Files" : options.RemotePath.Trim('/');
+        if (string.IsNullOrWhiteSpace(remoteBase))
+            return;
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            using var client = CreateFtpClient(options);
+            client.Connect();
+            client.CreateDirectory(remoteBase);
+            client.Disconnect();
+        }
+        catch
+        {
+            // best-effort: swallow since remote path creation should not block startup
+        }
+    }
+
+    private static FtpClient CreateFtpClient(SftpOptions options)
+    {
+        var client = new FtpClient(options.Host, options.Username ?? string.Empty, options.Password ?? string.Empty)
+        {
+            Port = options.Port
+        };
+
+        return client;
     }
 }

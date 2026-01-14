@@ -5,6 +5,8 @@ using KitStack.Storage.Local.Extensions;
 using KitStack.Storage.Local.HealthChecks;
 using KitStack.Storage.S3.Extensions;
 using KitStack.Storage.S3.HealthChecks;
+using KitStack.Storage.Sftp.Extensions;
+using KitStack.Storage.Sftp.HealthChecks;
 using KitStack.Fakes.Extensions;
 
 namespace KitStack.AspNetCore.Extensions;
@@ -64,10 +66,13 @@ public static class ServiceCollectionExtensions
             //     break;
 
             case "s3":
-                // S3 provider: expect a "S3" subsection under Storage
-                var s3Section = storageSection.GetSection("S3");
-                services.AddS3StorageManager(s3Section);
+                services.AddS3StorageManager(storageSection);
                 services.AddHealthChecks().AddCheck<S3HealthCheck>("s3");
+                break;
+
+            case "sftp":
+                services.AddSftpStorageManager(storageSection);
+                services.AddHealthChecks().AddCheck<SftpHealthCheck>("sftp");
                 break;
 
             default:
