@@ -1,4 +1,5 @@
-﻿using KitStack.Abstractions.Models;
+﻿using System.Collections.Concurrent;
+using KitStack.Abstractions.Models;
 using Microsoft.AspNetCore.Http;
 
 namespace KitStack.Abstractions.Interfaces;
@@ -51,3 +52,221 @@ public interface IFileStorageManager
     Task<(IFileEntry Primary, List<IFileEntry> Variants)> CreateWithVariantsAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
     where T : class;
 }
+
+
+
+
+
+/// <summary>
+/// DI-friendly registration descriptor that ties a StorageProvider instance to a concrete manager Type.
+/// This is useful when wiring providers in Startup/Program.cs so the registry and façade can resolve managers easily.
+/// </summary>
+public class StorageProviderRegistration
+{
+    public StorageProvider Provider { get; }
+    public Type? ManagerType { get; }
+
+    public StorageProviderRegistration(StorageProvider provider, Type? managerType = null)
+    {
+        Provider = provider ?? throw new ArgumentNullException(nameof(provider));
+        ManagerType = managerType;
+    }
+}
+
+
+
+/// <summary>
+/// Registry for provider definitions (register, find, update options). This in-memory registry can be seeded via DI
+/// using StorageProviderRegistration instances or at runtime via Register.
+/// </summary>
+public interface IStorageProviderRegistry
+{
+    IReadOnlyCollection<StorageProvider> GetAll();
+    StorageProvider? GetById(string id);
+    StorageProvider? GetById(Guid id);
+    StorageProvider? GetDefault();
+    void Register(StorageProvider provider);
+    bool TryUpdateOptions(string id, object options);
+    bool TryGetOptions<TOptions>(string id, out TOptions? options) where TOptions : class;
+}
+
+
+
+/// <summary>
+/// Optional non-generic hook: managers can implement this to receive runtime option updates.
+/// </summary>
+public interface IConfigurableProvider
+{
+    void UpdateOptions(object options);
+}
+
+/// <summary>
+/// Optional strongly-typed hook: implement this if you want typed option updates.
+/// </summary>
+/// <typeparam name="TOptions"></typeparam>
+public interface IConfigurableProvider<TOptions>
+{
+    void UpdateOptions(TOptions options);
+}
+
+/// <summary>
+/// Simple in-memory storage provider registry.
+/// - Can be seeded via DI by registering one or more StorageProviderRegistration instances (TryAddEnumerable).
+/// - Allows runtime Register/Update of providers.
+/// - Best-effort notifies manager instances resolved from DI that implement IConfigurableProvider.
+/// </summary>
+public class StorageProviderRegistry : IStorageProviderRegistry
+{
+    private readonly ConcurrentDictionary<Guid, StorageProvider> _map = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IServiceProvider _sp;
+
+    public StorageProviderRegistry(IServiceProvider serviceProvider, IEnumerable<StorageProviderRegistration>? registrations = null)
+    {
+        _sp = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+
+        if (registrations != null)
+        {
+            foreach (var r in registrations)
+            {
+                if (r?.Provider == null) continue;
+                _map[r.Provider.Id] = r.Provider;
+
+                // If registration included a manager type and provider.ManagerType not set, store it for future notifications.
+                if (!string.IsNullOrWhiteSpace(r.Provider.ManagerType) == false && r.ManagerType != null)
+                    r.Provider.ManagerType = r.ManagerType.AssemblyQualifiedName;
+            }
+        }
+    }
+
+    public IReadOnlyCollection<StorageProvider> GetAll() => _map.Values.ToList().AsReadOnly();
+
+    public StorageProvider? GetById(string id)
+    {
+        if (!Guid.TryParse(id, out var g)) return null;
+        return GetById(g);
+    }
+
+    public StorageProvider? GetById(Guid id)
+    {
+        return _map.TryGetValue(id, out var p) ? p : null;
+    }
+
+    public StorageProvider? GetDefault()
+    {
+        var all = _map.Values;
+        var d = all.FirstOrDefault(p => p.IsDefault);
+        return d ?? all.FirstOrDefault();
+    }
+
+    public void Register(StorageProvider provider)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        _map[provider.Id] = provider;
+    }
+
+    public bool TryUpdateOptions(string id, object options)
+    {
+        if (!Guid.TryParse(id, out var g)) return false;
+
+        if (!_map.TryGetValue(g, out var provider)) return false;
+
+        provider.Options = options;
+        provider.OptionsType = options?.GetType().AssemblyQualifiedName;
+
+        // try to notify manager instance (best-effort)
+        if (!string.IsNullOrWhiteSpace(provider.ManagerType))
+        {
+            try
+            {
+                var mgrType = Type.GetType(provider.ManagerType);
+                if (mgrType != null)
+                {
+                    var mgr = _sp.GetService(mgrType);
+                    if (mgr is IConfigurableProvider cfg)
+                    {
+                        cfg.UpdateOptions(options);
+                    }
+                    else
+                    {
+                        var iface = typeof(IConfigurableProvider<>).MakeGenericType(options.GetType());
+                        if (iface.IsInstanceOfType(mgr))
+                        {
+                            var mi = iface.GetMethod("UpdateOptions");
+                            mi?.Invoke(mgr, new[] { options });
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // best-effort notification; swallow exceptions
+            }
+        }
+
+        return true;
+    }
+
+    public bool TryGetOptions<TOptions>(string id, out TOptions? options) where TOptions : class
+    {
+        options = null;
+        if (!Guid.TryParse(id, out var g)) return false;
+
+        if (!_map.TryGetValue(g, out var provider)) return false;
+
+        if (provider.Options is TOptions typed)
+        {
+            options = typed;
+            return true;
+        }
+
+        // if Options is null or not typed as requested, fail (no DB/JSON path here)
+        return false;
+    }
+}
+
+
+/// <summary>
+/// Helpers to register providers and the in-memory registry.
+/// - Register StorageProviderRegistration(s) so StorageProviderRegistry can be seeded from DI.
+/// - Register the registry as a singleton.
+/// </summary>
+public static class ServiceCollectionExtensions
+{
+    /// <summary>
+    /// Add the in-memory StorageProviderRegistry and optionally seed it using StorageProviderRegistration entries provided in DI.
+    /// Call AddStorageProvider(...) to add registrations before calling this.
+    /// </summary>
+    public static IServiceCollection AddStorageProviderRegistry(this IServiceCollection services)
+    {
+        services.TryAddSingleton<IStorageProviderRegistry, StorageProviderRegistry>(sp =>
+        {
+            // resolve any registrations that were added
+            var regs = sp.GetService<IEnumerable<StorageProviderRegistration>>();
+            return new StorageProviderRegistry(sp, regs);
+        });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Register a provider + optional manager type into the DI collection so the registry will be seeded on startup.
+    /// Also registers the managerType in DI (transient) if provided.
+    /// </summary>
+    public static IServiceCollection AddStorageProvider(this IServiceCollection services, StorageProvider provider, Type? managerType = null)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+
+        // register the provider registration for the registry to pick up
+        services.TryAddEnumerable(ServiceDescriptor.Singleton(new StorageProviderRegistration(provider, managerType)));
+
+        if (managerType != null)
+        {
+            // register managerType as transient by default (consumer can override with explicit registration)
+            services.TryAddTransient(managerType);
+        }
+
+        return services;
+    }
+}
+
+

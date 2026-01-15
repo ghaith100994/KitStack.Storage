@@ -1,6 +1,4 @@
-﻿using KitStack.Abstractions.Interfaces;
-
-namespace KitStack.Abstractions.Models;
+﻿namespace KitStack.Abstractions.Interfaces;
 
 /// <summary>
 /// Optional interface for domain entities that can hold file attachments.
