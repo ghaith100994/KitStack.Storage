@@ -37,10 +37,6 @@ public static class ServiceCollectionExtensions
         // Bind Storage options
         services.Configure<StorageOptions>(opts => storageSection.Bind(opts));
 
-        // Bind Storage.Database section (optional)
-        var dbSection = storageSection.GetSection("Database");
-        services.Configure<StorageDbOptions>(opts => dbSection.Bind(opts));
-
         // decide which provider to register (simple switch)
         var provider = storageSection.GetValue<string>("Provider") ?? string.Empty;
 
