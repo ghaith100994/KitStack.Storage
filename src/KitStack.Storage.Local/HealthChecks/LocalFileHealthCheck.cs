@@ -10,11 +10,11 @@ namespace KitStack.Storage.Local.HealthChecks;
 /// </summary>
 public sealed class LocalFileHealthCheck : IHealthCheck
 {
-    private readonly LocalOptions _options;
+    private readonly Microsoft.Extensions.Options.IOptionsMonitor<LocalOptions> _optionsMonitor;
 
-    public LocalFileHealthCheck(IOptions<LocalOptions> options)
+    public LocalFileHealthCheck(Microsoft.Extensions.Options.IOptionsMonitor<LocalOptions> options)
     {
-        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _optionsMonitor = options ?? throw new ArgumentNullException(nameof(options));
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
@@ -23,9 +23,10 @@ public sealed class LocalFileHealthCheck : IHealthCheck
 
         try
         {
-            var basePath = Path.IsPathRooted(_options.Path)
-                ? _options.Path
-                : Path.Combine(Directory.GetCurrentDirectory(), _options.Path);
+            var opts = _optionsMonitor.CurrentValue ?? new LocalOptions();
+            var basePath = Path.IsPathRooted(opts.Path)
+                ? opts.Path
+                : Path.Combine(Directory.GetCurrentDirectory(), opts.Path);
 
             // Ensure directory exists
             if (!Directory.Exists(basePath))

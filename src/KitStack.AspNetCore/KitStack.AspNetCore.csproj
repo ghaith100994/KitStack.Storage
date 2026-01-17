@@ -27,9 +27,6 @@
 	
 	<ItemGroup>
     <ProjectReference Include="..\KitStack.Abstractions\KitStack.Abstractions.csproj" />
-    <ProjectReference Include="..\KitStack.Fakes\KitStack.Fakes.csproj" />
     <ProjectReference Include="..\KitStack.Storage.Local\KitStack.Storage.Local.csproj" />
-    <ProjectReference Include="..\KitStack.Storage.S3\KitStack.Storage.S3.csproj" />
-	  <ProjectReference Include="..\KitStack.Storage.Sftp\KitStack.Storage.Sftp.csproj" />
 	</ItemGroup>
 </Project>

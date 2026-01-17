@@ -1,13 +1,10 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using KitStack.Abstractions.Options;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using KitStack.Storage.Local.Extensions;
 using KitStack.Storage.Local.HealthChecks;
-using KitStack.Storage.S3.Extensions;
-using KitStack.Storage.S3.HealthChecks;
-using KitStack.Storage.Sftp.Extensions;
-using KitStack.Storage.Sftp.HealthChecks;
-using KitStack.Fakes.Extensions;
+using KitStack.Abstractions.Interfaces;
+using KitStack.AspNetCore.Services;
 
 namespace KitStack.AspNetCore.Extensions;
 
@@ -35,7 +32,7 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(storageSection);
 
         // Bind Storage options
-        services.Configure<StorageOptions>(opts => storageSection.Bind(opts));
+        // services.Configure<StorageOptions>(opts => storageSection.Bind(opts));
 
         // decide which provider to register (simple switch)
         var provider = storageSection.GetValue<string>("Provider") ?? string.Empty;
@@ -51,7 +48,7 @@ public static class ServiceCollectionExtensions
 
             case "fake":
                 // In-memory fake used for tests/dev
-                services.AddInMemoryFakeStorage();
+                // services.AddInMemoryFakeStorage();
                 break;
 
             // For Azure/Amazon/other: call provider-specific registration extensions if available.
@@ -62,13 +59,13 @@ public static class ServiceCollectionExtensions
             //     break;
 
             case "s3":
-                services.AddS3StorageManager(storageSection);
-                services.AddHealthChecks().AddCheck<S3HealthCheck>("s3");
+                // services.AddS3StorageManager(storageSection);
+                // services.AddHealthChecks().AddCheck<S3HealthCheck>("s3");
                 break;
 
             case "sftp":
-                services.AddSftpStorageManager(storageSection);
-                services.AddHealthChecks().AddCheck<SftpHealthCheck>("sftp");
+                // services.AddSftpStorageManager(storageSection);
+                // services.AddHealthChecks().AddCheck<SftpHealthCheck>("sftp");
                 break;
 
             default:
@@ -76,6 +73,9 @@ public static class ServiceCollectionExtensions
                 // (recommended for cloud providers or custom wiring).
                 break;
         }
+
+        // Register resolver implementation in host project so apps can resolve managers at runtime
+        services.TryAddSingleton<IProviderManagerResolver, ProviderManagerResolver>();
 
         return services;
     }

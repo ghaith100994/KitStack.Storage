@@ -65,7 +65,7 @@ public class ImageProcessingOptions
     /// <summary>
     /// Additional custom sizes to create. Each entry will be stored under a folder named after SizeName.
     /// </summary>
-    public IList<ImageSizeOption> AdditionalSizes { get; set; } = [];
+    public IList<ImageSizeOption> AdditionalSizes { get; set; } = new List<ImageSizeOption>();
 }
 
 public class ImageSizeOption

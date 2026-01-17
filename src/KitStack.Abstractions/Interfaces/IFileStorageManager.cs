@@ -21,7 +21,7 @@ public interface IFileStorageManager
     /// <param name="category">Logical category or module name used to organize storage (required).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that resolves to the stored <see cref="IFileEntry"/>.</returns>
-    Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
+    Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, StorageProvider? provider = null, CancellationToken cancellationToken = default)
         where T : class;
 
     /// <summary>
@@ -36,7 +36,7 @@ public interface IFileStorageManager
     /// <param name="category">Logical category or module name used to organize storage (required).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that resolves to the stored <see cref="IFileEntry"/>.</returns>
-    Task<IFileEntry> CreateAsync<T>(T entity, IFormFile file, string? category, CancellationToken cancellationToken = default)
+    Task<IFileEntry> CreateAsync<T>(T entity, IFormFile file, string? category,StorageProvider? provider = null, CancellationToken cancellationToken = default)
         where T : class, IFileAttachable;
 
     /// <summary>
@@ -49,6 +49,6 @@ public interface IFileStorageManager
     /// <param name="category">Logical category or module name used to organize storage (required).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that resolves to a tuple containing the primary entry and created variants.</returns>
-    Task<(IFileEntry Primary, List<IFileEntry> Variants)> CreateWithVariantsAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
+    Task<(IFileEntry Primary, List<IFileEntry> Variants)> CreateWithVariantsAsync<T>(IFormFile file, string? category, Models.StorageProvider? provider = null, CancellationToken cancellationToken = default)
     where T : class;
 }

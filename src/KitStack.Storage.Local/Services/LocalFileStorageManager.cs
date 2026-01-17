@@ -1,4 +1,5 @@
-﻿using KitStack.Abstractions.Exceptions;
+﻿using System.Runtime.InteropServices;
+using KitStack.Abstractions.Exceptions;
 using KitStack.Abstractions.Extensions;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Abstractions.Models;
@@ -6,7 +7,7 @@ using KitStack.Abstractions.Utilities;
 using KitStack.Storage.Local.Options;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
-using System.Runtime.InteropServices;
+using Microsoft.VisualBasic.FileIO;
 
 namespace KitStack.Storage.Local.Services;
 
@@ -14,15 +15,35 @@ namespace KitStack.Storage.Local.Services;
 /// Local file system implementation of IFileStorageManager.
 /// Uses LocalOptions.Path as base directory.
 /// </summary>
-public class LocalFileStorageManager : IFileStorageManager
+public partial class LocalFileStorageManager : IFileStorageManager
 {
-    private readonly LocalOptions _option;
-    private readonly string _basePath;
+    private LocalOptions _option;
+    private string _basePath = string.Empty;
 
-    public LocalFileStorageManager(IOptions<LocalOptions> option)
+    public LocalFileStorageManager(IOptionsMonitor<LocalOptions> optionMonitor)
     {
-        _option = option?.Value ?? throw new ArgumentNullException(nameof(option));
+        ArgumentNullException.ThrowIfNull(optionMonitor);
 
+        _option = optionMonitor.CurrentValue ?? new LocalOptions();
+        EnsureInitializedFromOptions();
+
+        // Subscribe to changes so we can update internal state at runtime
+        optionMonitor.OnChange(newOpts =>
+        {
+            try
+            {
+                _option = newOpts ?? new LocalOptions();
+                EnsureInitializedFromOptions();
+            }
+            catch
+            {
+                // Best-effort: swallow configuration change failures
+            }
+        });
+    }
+
+    private void EnsureInitializedFromOptions()
+    {
         if (string.IsNullOrWhiteSpace(_option.Path))
             _option.Path = Path.Combine(Directory.GetCurrentDirectory(), "Files");
 
@@ -35,7 +56,22 @@ public class LocalFileStorageManager : IFileStorageManager
     /// <summary>
     /// Create and store the primary/original file for entity T. This stores only the original file.
     /// </summary>
-    public async Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
+    public Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
+        where T : class
+    {
+        return CreateInternalAsync<T>(file, category, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Overload that accepts a StorageProvider so the returned FileEntry can reference the provider Id.
+    /// </summary>
+    public Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, StorageProvider? provider, CancellationToken cancellationToken = default)
+        where T : class
+    {
+        return CreateInternalAsync<T>(file, category, provider, cancellationToken);
+    }
+
+    private async Task<IFileEntry> CreateInternalAsync<T>(IFormFile file, string? category, StorageProvider? provider, CancellationToken cancellationToken = default)
         where T : class
     {
         ArgumentNullException.ThrowIfNull(file);
@@ -66,7 +102,7 @@ public class LocalFileStorageManager : IFileStorageManager
             FileExtension = extension,
             Category = category,
             Encrypted = false,
-            StorageProvider = "Local",
+            StorageProvider = provider != null ? provider.Id.ToString() : "Local",
             LastAccessedTime = DateTimeOffset.UtcNow,
             VariantType = "original",
         };
@@ -103,14 +139,27 @@ public class LocalFileStorageManager : IFileStorageManager
     }
 
     /// <summary>
+    /// Overload that accepts a StorageProvider so the returned FileEntry can reference the provider Id.
+    /// </summary>
+    public async Task<IFileEntry> CreateAsync<T>(T entity, IFormFile file, string? category, KitStack.Abstractions.Models.StorageProvider? provider, CancellationToken cancellationToken = default)
+        where T : class, IFileAttachable
+    {
+        var primary = await CreateAsync<T>(file, category, provider, cancellationToken).ConfigureAwait(false);
+
+        entity.AddFileAttachment(primary);
+        primary.LinkToEntity(entity, category ?? typeof(T).Name);
+        return primary;
+    }
+
+    /// <summary>
     /// Create and store the primary file and image variants as configured.
     /// Returns the primary FileEntry and a list of FileEntry objects for variants that were created.
     /// </summary>
-    public async Task<(IFileEntry Primary, List<IFileEntry> Variants)> CreateWithVariantsAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
+    public async Task<(IFileEntry Primary, List<IFileEntry> Variants)> CreateWithVariantsAsync<T>(IFormFile file, string? category, KitStack.Abstractions.Models.StorageProvider? provider = null, CancellationToken cancellationToken = default)
         where T : class
     {
         // First create the primary/original file (reuse logic)
-        var primary = await CreateAsync<T>(file, category, cancellationToken).ConfigureAwait(false);
+        var primary = await CreateAsync<T>(file, category, provider, cancellationToken).ConfigureAwait(false);
 
         var variants = new List<IFileEntry>();
 
@@ -130,7 +179,7 @@ public class LocalFileStorageManager : IFileStorageManager
         if (_option.ImageProcessing.CreateCompressed)
         {
             var compressedRelative = await CreateCompressedVariantAsync(bytes, uplaodFolderPath, relativeFolderPath, new Guid(primary.Id.ToString()), cancellationToken).ConfigureAwait(false);
-            var compressedEntry = BuildVariantFileEntry(compressedRelative);
+            var compressedEntry = BuildVariantFileEntry(compressedRelative, primary.StorageProvider);
             compressedEntry.CopyRelationsFrom(primary);
             compressedEntry.Metadata ??= new Dictionary<string, string>();
             compressedEntry.VariantType = "compressed";
@@ -147,7 +196,7 @@ public class LocalFileStorageManager : IFileStorageManager
         if (_option.ImageProcessing.CreateThumbnail)
         {
             var thumbRelative = await CreateThumbnailVariantAsync(bytes, uplaodFolderPath, relativeFolderPath, new Guid(primary.Id.ToString()), cancellationToken).ConfigureAwait(false);
-            var thumbEntry = BuildVariantFileEntry(thumbRelative);
+            var thumbEntry = BuildVariantFileEntry(thumbRelative, primary.StorageProvider);
             thumbEntry.CopyRelationsFrom(primary);
             thumbEntry.Metadata ??= new Dictionary<string, string>();
             thumbEntry.VariantType = "thumbnail";
@@ -166,7 +215,7 @@ public class LocalFileStorageManager : IFileStorageManager
             var variantPaths = await CreateAdditionalVariantsAsync(bytes, uplaodFolderPath, relativeFolderPath, _option.ImageProcessing.AdditionalSizes, cancellationToken).ConfigureAwait(false);
             var variantEntries = variantPaths.Select(p =>
             {
-                var ve = BuildVariantFileEntry(p);
+                var ve = BuildVariantFileEntry(p, primary.StorageProvider);
                 ve.CopyRelationsFrom(primary);
                 ve.Metadata ??= new Dictionary<string, string>();
                 ve.Category = category;
@@ -268,7 +317,7 @@ public class LocalFileStorageManager : IFileStorageManager
         return variants;
     }
 
-    private FileEntry BuildVariantFileEntry(string relativePath)
+    private FileEntry BuildVariantFileEntry(string relativePath, string? providerId = null)
     {
         // relativePath is provider-relative (e.g. "Module/Entity/Images/thumbnails/abcd.jpg")
         var full = GetFullPathFromRelative(relativePath);
@@ -289,7 +338,7 @@ public class LocalFileStorageManager : IFileStorageManager
             ContentType = "image/jpeg",
             UploadedTime = DateTime.UtcNow,
             VariantType = variantType,
-            StorageProvider = "Local",
+            StorageProvider = providerId ?? "Local",
             OriginalFileName = Path.GetFileName(relativePath),
             LastAccessedTime = DateTimeOffset.UtcNow,
         };
