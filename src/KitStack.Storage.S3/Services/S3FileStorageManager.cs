@@ -2,12 +2,12 @@ using System.Net.Sockets;
 using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
-using Amazon.S3.Transfer;
 using Amazon.S3.Util;
 using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Extensions;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Abstractions.Models;
+using KitStack.Abstractions.Options;
+using KitStack.Abstractions.Services;
 using KitStack.Abstractions.Utilities;
 using KitStack.Storage.S3.Helpers;
 using KitStack.Storage.S3.Options;
@@ -16,12 +16,14 @@ using Amazon.Runtime;
 
 namespace KitStack.Storage.S3.Services;
 
-public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
+public sealed class S3FileStorageManager : FileStorageManagerBase, IDisposable
 {
     private readonly AmazonS3Client _client;
     private readonly S3Options _options;
     private readonly S3TargetOptions _mainTarget;
     private bool _disposed;
+
+    protected override string StorageProvider => "S3";
 
     public S3FileStorageManager(S3Options options)
     {
@@ -32,7 +34,9 @@ public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
         _client = CreateClientForTarget(_mainTarget);
     }
 
-    public async Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default) where T : class
+    protected override ImageProcessingOptions? GetImageProcessingOptions() => _options.ImageProcessing;
+
+    public override async Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default) where T : class
     {
         ArgumentNullException.ThrowIfNull(file);
         if (string.IsNullOrWhiteSpace(category))
@@ -42,7 +46,7 @@ public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
         var entityName = typeof(T).Name;
         var typeFolder = ImageProcessingHelper.GetFileTypeFolder(extension);
         var relative = Path.Combine(category, entityName, typeFolder).Replace('\\', '/');
-        var key = S3KeyHelper.NormalizeKey(_mainTarget.Prefix ?? string.Empty, relative, $"{Guid.NewGuid():N}-{Path.GetFileName(file.FileName)}{extension}");
+        var key = S3KeyHelper.NormalizeKey(_mainTarget.Prefix ?? string.Empty, relative, $"{Guid.NewGuid():N}-{Path.GetFileNameWithoutExtension(file.FileName)}{extension}");
 
         var entry = new FileEntry
         {
@@ -56,8 +60,9 @@ public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
             Category = category,
             Encrypted = false,
             VariantType = "original",
-            StorageProvider = "S3",
+            StorageProvider = StorageProvider,
             LastAccessedTime = DateTimeOffset.UtcNow,
+            Metadata = new Dictionary<string, string>(),
         };
 
         using var ms = new MemoryStream();
@@ -77,166 +82,41 @@ public sealed class S3FileStorageManager : IFileStorageManager, IDisposable
         return entry;
     }
 
-    public async Task<IFileEntry> CreateAsync<T>(T entity, IFormFile file, string? category, CancellationToken cancellationToken = default) where T : class, IFileAttachable
+    /// <summary>
+    /// Uploads a processed JPEG variant to the appropriate S3 target and returns its key.
+    /// Per-variant target routing uses <see cref="S3ImageProcessingOptions"/> when configured.
+    /// </summary>
+    protected override async Task<string> StoreVariantAsync(
+        MemoryStream data,
+        string relativeFolder,
+        string variantFolder,
+        string fileName,
+        string variantType,
+        CancellationToken ct)
     {
-        var primary = await CreateAsync<T>(file, category, cancellationToken).ConfigureAwait(false);
-        entity.AddFileAttachment(primary);
-        primary.LinkToEntity(entity, category ?? typeof(T).Name);
-        return primary;
-    }
-
-    public async Task<(IFileEntry Primary, List<IFileEntry> Variants)> CreateWithVariantsAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default) where T : class
-    {
-        var primary = await CreateAsync<T>(file, category, cancellationToken).ConfigureAwait(false);
-        var variants = new List<IFileEntry>();
-
-        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (!ImageProcessingHelper.IsImageExtension(extension) || _options.ImageProcessing == null)
-            return (primary, variants);
-
-        await using var stream = file.OpenReadStream();
-        using var ms = new MemoryStream();
-        await stream.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
-        var bytes = ms.ToArray();
-
-        // compressed
-        if (_options.ImageProcessing.CreateCompressed)
+        var ip = _options.ImageProcessing;
+        S3TargetOptions target = variantType switch
         {
-            using var src = new MemoryStream(bytes);
-            await using var outStream = new MemoryStream();
-            await ImageProcessingHelper.CreateResizedJpegToStreamAsync(src, outStream,
-                _options.ImageProcessing.CompressedMaxWidth,
-                _options.ImageProcessing.CompressedMaxHeight,
-                _options.ImageProcessing.JpegQuality, cancellationToken).ConfigureAwait(false);
-            outStream.Seek(0, SeekOrigin.Begin);
+            "compressed" => ip?.CompressedTarget ?? _mainTarget,
+            "thumbnail"  => ip?.ThumbnailTarget  ?? _mainTarget,
+            _            => ip?.AdditionalSizes.FirstOrDefault(s => s.SizeName == variantType) is S3ImageSizeOption s3s
+                               ? s3s.Target ?? _mainTarget
+                               : _mainTarget,
+        };
 
-            var compressedTarget = _options.ImageProcessing.CompressedTarget ?? _mainTarget;
-            var keyRel = Path.Combine(category ?? string.Empty, typeof(T).Name, ImageProcessingHelper.GetFileTypeFolder(extension), "compressed").Replace('\\', '/');
-            var key = S3KeyHelper.NormalizeKey(compressedTarget.Prefix ?? string.Empty, keyRel, $"{Guid.NewGuid():N}-{Path.GetFileName(file.FileName)}{extension}");
+        var keyRel = $"{relativeFolder}/{variantFolder}".Replace('\\', '/').Trim('/');
+        var key = S3KeyHelper.NormalizeKey(target.Prefix ?? string.Empty, keyRel, fileName);
 
-            var (clientC, bucketC, disposeC) = GetClientAndBucket(compressedTarget);
-            try
-            {
-                await UploadStreamAsync(clientC, bucketC, key, outStream, "image/jpeg", compressedTarget, cancellationToken).ConfigureAwait(false);
-            }
-            finally
-            {
-                if (disposeC) clientC.Dispose();
-            }
-
-            FileEntry item = new()
-            {
-                Id = Guid.NewGuid(),
-                FileName = Path.GetFileName(keyRel),
-                FileLocation = key,
-                Size = outStream.Length,
-                ContentType = "image/jpeg",
-                UploadedTime = DateTime.UtcNow,
-                VariantType = "compressed",
-                Category = category,
-                Encrypted = false,
-                FileExtension = extension,
-                OriginalFileName = Path.GetFileName(file.FileName),
-                StorageProvider = "S3",
-                LastAccessedTime = DateTimeOffset.UtcNow,
-            };
-            item.CopyRelationsFrom(primary);
-            variants.Add(item);
-        }
-
-        // thumbnail
-        if (_options.ImageProcessing.CreateThumbnail)
+        var (client, bucket, dispose) = GetClientAndBucket(target);
+        try
         {
-            using var src = new MemoryStream(bytes);
-            await using var outStream = new MemoryStream();
-            await ImageProcessingHelper.CreateResizedJpegToStreamAsync(src, outStream,
-                _options.ImageProcessing.ThumbnailMaxWidth,
-                _options.ImageProcessing.ThumbnailMaxHeight,
-                _options.ImageProcessing.JpegQuality, cancellationToken).ConfigureAwait(false);
-            outStream.Seek(0, SeekOrigin.Begin);
-
-            var thumbTarget = _options.ImageProcessing.ThumbnailTarget ?? _mainTarget;
-            var keyRel = Path.Combine(category ?? string.Empty, typeof(T).Name, ImageProcessingHelper.GetFileTypeFolder(extension), "thumbnails").Replace('\\', '/');
-            var key = S3KeyHelper.NormalizeKey(thumbTarget.Prefix ?? string.Empty, keyRel, $"{Guid.NewGuid():N}-{Path.GetFileName(file.FileName)}{extension}");
-
-            var (clientT, bucketT, disposeT) = GetClientAndBucket(thumbTarget);
-            try
-            {
-                await UploadStreamAsync(clientT, bucketT, key, outStream, "image/jpeg", thumbTarget, cancellationToken).ConfigureAwait(false);
-
-            }
-            finally
-            {
-                if (disposeT) clientT.Dispose();
-            }
-
-            FileEntry item = new()
-            {
-                Id = Guid.NewGuid(),
-                FileName = Path.GetFileName(keyRel),
-                FileLocation = key,
-                Size = outStream.Length,
-                ContentType = "image/jpeg",
-                UploadedTime = DateTime.UtcNow,
-                VariantType = "thumbnail",
-                Category = category,
-                FileExtension = extension,
-                Encrypted = false,
-                OriginalFileName = Path.GetFileName(file.FileName),
-                StorageProvider = "S3",
-                LastAccessedTime = DateTimeOffset.UtcNow,
-            };
-            item.CopyRelationsFrom(primary);
-            variants.Add(item);
+            await UploadStreamAsync(client, bucket, key, data, "image/jpeg", target, ct).ConfigureAwait(false);
         }
-
-        // additional sizes
-        if (_options.ImageProcessing.AdditionalSizes?.Count > 0)
+        finally
         {
-            foreach (var size in _options.ImageProcessing.AdditionalSizes)
-            {
-                using var src = new MemoryStream(bytes);
-                await using var outStream = new MemoryStream();
-                await ImageProcessingHelper.CreateResizedJpegToStreamAsync(src, outStream, size.MaxWidth, size.MaxHeight, size.JpegQuality, cancellationToken).ConfigureAwait(false);
-                outStream.Seek(0, SeekOrigin.Begin);
-
-                var target = size.Target ?? _mainTarget;
-                var keyRel = Path.Combine(category ?? string.Empty, typeof(T).Name, ImageProcessingHelper.GetFileTypeFolder(extension), size.SizeName).Replace('\\', '/');
-                var key = S3KeyHelper.NormalizeKey(target.Prefix ?? string.Empty, keyRel, $"{Guid.NewGuid():N}-{Path.GetFileName(file.FileName)}{extension}");
-
-                var (clientSize, bucketSize, disposeSize) = GetClientAndBucket(target);
-                try
-                {
-                    await UploadStreamAsync(clientSize, bucketSize, key, outStream, "image/jpeg", target, cancellationToken).ConfigureAwait(false);
-
-                }
-                finally
-                {
-                    if (disposeSize) clientSize.Dispose();
-                }
-
-                FileEntry item = new()
-                {
-                    Id = Guid.NewGuid(),
-                    FileName = Path.GetFileName(keyRel),
-                    FileLocation = key,
-                    Size = outStream.Length,
-                    ContentType = "image/jpeg",
-                    UploadedTime = DateTime.UtcNow,
-                    VariantType = size.SizeName,
-                    Category = category,
-                    FileExtension = extension,
-                    Encrypted = false,
-                    OriginalFileName = Path.GetFileName(file.FileName),
-                    StorageProvider = "S3",
-                    LastAccessedTime = DateTimeOffset.UtcNow,
-                };
-                item.CopyRelationsFrom(primary);
-                variants.Add(item);
-            }
+            if (dispose) client.Dispose();
         }
-
-        return (primary, variants);
+        return key;
     }
 
     public void Dispose()

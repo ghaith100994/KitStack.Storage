@@ -32,8 +32,8 @@ public static class S3BucketHelper
             if (options.ImageProcessing.AdditionalSizes != null)
             {
                 foreach (var s in options.ImageProcessing.AdditionalSizes)
-                    if (s?.Target != null)
-                        targets.Add(s.Target);
+                    if (s is S3ImageSizeOption s3s && s3s.Target != null)
+                        targets.Add(s3s.Target);
             }
         }
 

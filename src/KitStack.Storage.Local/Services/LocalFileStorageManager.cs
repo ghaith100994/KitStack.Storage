@@ -1,7 +1,8 @@
 ﻿using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Extensions;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Abstractions.Models;
+using KitStack.Abstractions.Options;
+using KitStack.Abstractions.Services;
 using KitStack.Abstractions.Utilities;
 using KitStack.Storage.Local.Options;
 using Microsoft.AspNetCore.Http;
@@ -11,13 +12,15 @@ using System.Runtime.InteropServices;
 namespace KitStack.Storage.Local.Services;
 
 /// <summary>
-/// Local file system implementation of IFileStorageManager.
-/// Uses LocalOptions.Path as base directory.
+/// Local file system implementation of <see cref="IFileStorageManager"/>.
+/// Uses <see cref="LocalOptions.Path"/> as the base directory.
 /// </summary>
-public class LocalFileStorageManager : IFileStorageManager
+public class LocalFileStorageManager : FileStorageManagerBase
 {
     private readonly LocalOptions _option;
     private readonly string _basePath;
+
+    protected override string StorageProvider => "Local";
 
     public LocalFileStorageManager(IOptions<LocalOptions> option)
     {
@@ -32,29 +35,25 @@ public class LocalFileStorageManager : IFileStorageManager
             Directory.CreateDirectory(_basePath);
     }
 
+    protected override ImageProcessingOptions? GetImageProcessingOptions() => _option.ImageProcessing;
+
     /// <summary>
-    /// Create and store the primary/original file for entity T. This stores only the original file.
+    /// Stores the primary/original file on disk and returns its populated <see cref="IFileEntry"/>.
     /// </summary>
-    public async Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
-        where T : class
+    public override async Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(file);
         if (string.IsNullOrWhiteSpace(category))
             throw new StorageValidationException("Category is required.");
-        if (string.IsNullOrWhiteSpace(_option.Path))
-            throw new StorageConfigurationException("Storage path is not configured.");
 
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
         var entityName = typeof(T).Name;
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            entityName = entityName.Replace(@"\", "/", StringComparison.OrdinalIgnoreCase);
 
         var typeFolder = ImageProcessingHelper.GetFileTypeFolder(extension);
         var relativeFolderPath = Path.Combine(category, entityName, typeFolder);
         var uploadFolder = Path.Combine(_basePath, relativeFolderPath);
         Directory.CreateDirectory(uploadFolder);
 
-        // Build FileEntry for original
         var fileEntry = new FileEntry
         {
             Id = Guid.NewGuid(),
@@ -66,238 +65,69 @@ public class LocalFileStorageManager : IFileStorageManager
             FileExtension = extension,
             Category = category,
             Encrypted = false,
-            StorageProvider = "Local",
+            StorageProvider = StorageProvider,
             LastAccessedTime = DateTimeOffset.UtcNow,
             VariantType = "original",
+            Metadata = new Dictionary<string, string>(),
         };
 
-        fileEntry.Metadata ??= new Dictionary<string, string>();
-
-        // Sanitize original file name
-        var originalName = Path.GetFileNameWithoutExtension(file.FileName) ?? string.Empty;
-        originalName = string.Concat(originalName.Split(Path.GetInvalidFileNameChars()));
+        var originalName = string.Concat(
+            (Path.GetFileNameWithoutExtension(file.FileName) ?? string.Empty)
+            .Split(Path.GetInvalidFileNameChars()));
         var fileName = $"{fileEntry.Id:N}-{originalName}{extension}";
         var fullFilePath = Path.Combine(uploadFolder, fileName);
 
-        // Save original directly to disk (streamed)
         await using (var outFs = new FileStream(fullFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-        {
             await file.CopyToAsync(outFs, cancellationToken).ConfigureAwait(false);
-        }
 
-        // Provider-relative path (URL-safe)
+        // Provider-relative path (URL-safe, no base dir prefix)
         fileEntry.FileLocation = Path.Combine(relativeFolderPath, fileName).Replace('\\', '/');
+        // Full storage path including the configured base directory (URL-safe)
+        fileEntry.StoragePath = Path.Combine(_option.Path, relativeFolderPath, fileName).Replace('\\', '/');
 
         return fileEntry;
     }
 
 
-    public async Task<IFileEntry> CreateAsync<T>(T entity, IFormFile file, string? category, CancellationToken cancellationToken = default)
-        where T : class, IFileAttachable
+    /// <summary>
+    /// Writes the processed JPEG to disk under <c>relativeFolder/variantFolder/</c> and returns
+    /// the provider-relative path (no base directory prefix).
+    /// </summary>
+    protected override async Task<string> StoreVariantAsync(
+        MemoryStream data,
+        string relativeFolder,
+        string variantFolder,
+        string fileName,
+        string variantType,
+        CancellationToken ct)
     {
-        var primary = await CreateAsync<T>(file, category, cancellationToken).ConfigureAwait(false);
+        var uploadFolder = Path.Combine(_basePath, relativeFolder, variantFolder);
+        Directory.CreateDirectory(uploadFolder);
 
-        entity.AddFileAttachment(primary);
-        primary.LinkToEntity(entity, category ?? typeof(T).Name);
-        return primary;
+        var fullPath = Path.Combine(uploadFolder, fileName);
+        await using (var fileOut = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+            await data.CopyToAsync(fileOut, ct).ConfigureAwait(false);
+
+        return Path.Combine(relativeFolder, variantFolder, fileName).Replace('\\', '/');
     }
 
     /// <summary>
-    /// Create and store the primary file and image variants as configured.
-    /// Returns the primary FileEntry and a list of FileEntry objects for variants that were created.
+    /// Extends the base variant entry with <see cref="IFileEntry.StoragePath"/>.
     /// </summary>
-    public async Task<(IFileEntry Primary, List<IFileEntry> Variants)> CreateWithVariantsAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
-        where T : class
+    protected override FileEntry BuildVariantEntry(
+        string location, long size, string variantType, string? category, IFileEntry primary)
     {
-        // First create the primary/original file (reuse logic)
-        var primary = await CreateAsync<T>(file, category, cancellationToken).ConfigureAwait(false);
-
-        var variants = new List<IFileEntry>();
-
-        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (!ImageProcessingHelper.IsImageExtension(extension) || _option.ImageProcessing == null)
-            return (primary, variants); // no image-processing required
-
-        // Read bytes into memory once for variant creation
-        await using var stream = file.OpenReadStream();
-        using var ms = new MemoryStream();
-        await stream.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
-        var bytes = ms.ToArray();
-
-        var relativeFolderPath = Path.GetDirectoryName(primary.FileLocation) ?? string.Empty;
-        var uplaodFolderPath =  Path.Combine(_basePath, relativeFolderPath);
-        // Compressed variant
-        if (_option.ImageProcessing.CreateCompressed)
-        {
-            var compressedRelative = await CreateCompressedVariantAsync(bytes, uplaodFolderPath, relativeFolderPath, new Guid(primary.Id.ToString()), cancellationToken).ConfigureAwait(false);
-            var compressedEntry = BuildVariantFileEntry(compressedRelative);
-            compressedEntry.CopyRelationsFrom(primary);
-            compressedEntry.Metadata ??= new Dictionary<string, string>();
-            compressedEntry.VariantType = "compressed";
-            compressedEntry.Category = category;
-            compressedEntry.Encrypted = false;
-            variants.Add(compressedEntry);
-
-            // Also add reference in primary metadata
-            primary.Metadata ??= new Dictionary<string, string>();
-            primary.Metadata["CompressedPath"] = compressedRelative;
-        }
-
-        // Thumbnail variant
-        if (_option.ImageProcessing.CreateThumbnail)
-        {
-            var thumbRelative = await CreateThumbnailVariantAsync(bytes, uplaodFolderPath, relativeFolderPath, new Guid(primary.Id.ToString()), cancellationToken).ConfigureAwait(false);
-            var thumbEntry = BuildVariantFileEntry(thumbRelative);
-            thumbEntry.CopyRelationsFrom(primary);
-            thumbEntry.Metadata ??= new Dictionary<string, string>();
-            thumbEntry.VariantType = "thumbnail";
-            thumbEntry.Category = category;
-            thumbEntry.Encrypted = false;
-
-            variants.Add(thumbEntry);
-
-            primary.Metadata ??= new Dictionary<string, string>();
-            primary.Metadata["ThumbnailPath"] = thumbRelative;
-        }
-
-        // Additional sizes
-        if (_option.ImageProcessing.AdditionalSizes != null && _option.ImageProcessing.AdditionalSizes.Count > 0)
-        {
-            var variantPaths = await CreateAdditionalVariantsAsync(bytes, uplaodFolderPath, relativeFolderPath, _option.ImageProcessing.AdditionalSizes, cancellationToken).ConfigureAwait(false);
-            var variantEntries = variantPaths.Select(p =>
-            {
-                var ve = BuildVariantFileEntry(p);
-                ve.CopyRelationsFrom(primary);
-                ve.Metadata ??= new Dictionary<string, string>();
-                ve.Category = category;
-                ve.Encrypted = false;
-                return ve;
-            }).ToList();
-
-            variants.AddRange(variantEntries);
-
-            if (variantPaths.Count > 0)
-            {
-                primary.Metadata ??= new Dictionary<string, string>();
-                primary.Metadata["Variants"] = string.Join(';', variantPaths);
-            }
-        }
-
-        return (primary, variants);
-    }
-
-    private async Task<string> CreateCompressedVariantAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, Guid fileId, CancellationToken cancellationToken)
-    {
-        var compressedFolder = Path.Combine(uploadFolder, "compressed");
-        if (!Directory.Exists(compressedFolder))
-            Directory.CreateDirectory(compressedFolder);
-
-        var compressedFull = Path.Combine(compressedFolder, $"{fileId:N}.jpg");
-
-        using var src = new MemoryStream(bytes);
-        await using var outStream = new MemoryStream();
-        await ImageProcessingHelper.CreateResizedJpegToStreamAsync(src, outStream,
-            _option.ImageProcessing.CompressedMaxWidth,
-            _option.ImageProcessing.CompressedMaxHeight,
-            _option.ImageProcessing.JpegQuality,
-            cancellationToken).ConfigureAwait(false);
-
-        outStream.Seek(0, SeekOrigin.Begin);
-        await using (var fileOut = new FileStream(compressedFull, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-        {
-            await outStream.CopyToAsync(fileOut, cancellationToken).ConfigureAwait(false);
-        }
-
-        return Path.Combine(relativeFolderPath, "compressed", $"{fileId:N}.jpg").Replace('\\', '/');
-    }
-
-    private async Task<string> CreateThumbnailVariantAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, Guid fileId, CancellationToken cancellationToken)
-    {
-        var thumbsFolder = Path.Combine(uploadFolder, "thumbnails");
-        if (!Directory.Exists(thumbsFolder))
-            Directory.CreateDirectory(thumbsFolder);
-
-        var thumbFull = Path.Combine(thumbsFolder, $"{fileId:N}.jpg");
-
-        using var src = new MemoryStream(bytes);
-        await using var outStream = new MemoryStream();
-        await ImageProcessingHelper.CreateResizedJpegToStreamAsync(src, outStream,
-            _option.ImageProcessing.ThumbnailMaxWidth,
-            _option.ImageProcessing.ThumbnailMaxHeight,
-            _option.ImageProcessing.JpegQuality,
-            cancellationToken).ConfigureAwait(false);
-
-        outStream.Seek(0, SeekOrigin.Begin);
-        await using (var fileOut = new FileStream(thumbFull, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-        {
-            await outStream.CopyToAsync(fileOut, cancellationToken).ConfigureAwait(false);
-        }
-
-        return Path.Combine(relativeFolderPath, "thumbnails", $"{fileId:N}.jpg").Replace('\\', '/');
-    }
-
-    private async static Task<List<string>> CreateAdditionalVariantsAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, IList<ImageSizeOption> sizes, CancellationToken cancellationToken)
-    {
-        var variants = new List<string>();
-
-        foreach (var size in sizes)
-        {
-            if (string.IsNullOrWhiteSpace(size.SizeName)) continue;
-
-            var sizeFolder = Path.Combine(uploadFolder, size.SizeName);
-            if (!Directory.Exists(sizeFolder))
-                Directory.CreateDirectory(sizeFolder);
-
-            var sizeFileName = $"{Guid.NewGuid():N}.jpg";
-            var sizeFullPath = Path.Combine(sizeFolder, sizeFileName);
-
-            using var src = new MemoryStream(bytes);
-            await using var outStream = new MemoryStream();
-            await ImageProcessingHelper.CreateResizedJpegToStreamAsync(src, outStream, size.MaxWidth, size.MaxHeight, size.JpegQuality, cancellationToken)
-                .ConfigureAwait(false);
-
-            outStream.Seek(0, SeekOrigin.Begin);
-            await using (var fileOut = new FileStream(sizeFullPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-            {
-                await outStream.CopyToAsync(fileOut, cancellationToken).ConfigureAwait(false);
-            }
-
-            variants.Add(Path.Combine(relativeFolderPath, size.SizeName, sizeFileName).Replace('\\', '/'));
-        }
-
-        return variants;
-    }
-
-    private FileEntry BuildVariantFileEntry(string relativePath)
-    {
-        // relativePath is provider-relative (e.g. "Module/Entity/Images/thumbnails/abcd.jpg")
-        var full = GetFullPathFromRelative(relativePath);
-        var info = new FileInfo(full);
-
-        // Derive VariantType from the containing folder name (e.g. "thumbnails", "compressed", or custom size name)
-        var dir = Path.GetDirectoryName(relativePath) ?? string.Empty;
-        var variantType = Path.GetFileName(dir) ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(variantType))
-            variantType = null;
-
-        var entry = new FileEntry
-        {
-            Id = Guid.NewGuid(),
-            FileName = Path.GetFileName(relativePath),
-            FileLocation = relativePath,
-            Size = info.Exists ? info.Length : 0,
-            ContentType = "image/jpeg",
-            UploadedTime = DateTime.UtcNow,
-            VariantType = variantType,
-            StorageProvider = "Local",
-            OriginalFileName = Path.GetFileName(relativePath),
-            LastAccessedTime = DateTimeOffset.UtcNow,
-        };
-
+        var entry = base.BuildVariantEntry(location, size, variantType, category, primary);
+        entry.StoragePath = Path.Combine(_option.Path, location).Replace('\\', '/');
         return entry;
     }
 
-    private string GetFullPathFromRelative(string relativePath)
+
+    /// <summary>
+    /// Resolves a provider-relative or absolute path to its full disk path,
+    /// guarding against directory-traversal attacks.
+    /// </summary>
+    protected string GetFullPathFromRelative(string relativePath)
     {
         if (string.IsNullOrWhiteSpace(relativePath))
             throw new StorageValidationException("Relative path must be provided.");
@@ -309,7 +139,6 @@ public class LocalFileStorageManager : IFileStorageManager
 
         var baseFull = Path.GetFullPath(_basePath);
 
-        // If caller passed an absolute path, resolve and ensure it stays under base
         if (Path.IsPathRooted(relativePath))
         {
             var absolute = Path.GetFullPath(relativePath);
@@ -318,13 +147,9 @@ public class LocalFileStorageManager : IFileStorageManager
             return absolute;
         }
 
-        // Trim leading slashes so Path.Combine behaves as intended
-        var relative = relativePath.TrimStart('/', '\\');
-
-        var combined = Path.Combine(_basePath, relative);
+        var combined = Path.Combine(_basePath, relativePath.TrimStart('/', '\\'));
         var full = Path.GetFullPath(combined);
 
-        // Ensure the resolved path is inside the configured base path (prevent directory traversal)
         if (!full.StartsWith(baseFull, comparison) && !string.Equals(full, baseFull, comparison))
             throw new StorageValidationException("File path escapes base storage path.");
 

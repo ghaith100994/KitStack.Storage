@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Collections.Generic;
+using KitStack.Abstractions.Options;
 
 namespace KitStack.Storage.Sftp.Options;
 
@@ -51,26 +52,4 @@ public class SftpOptions : IValidatableObject
 
         return results;
     }
-}
-
-// Image processing options used by the FTP manager when creating variants.
-public class ImageProcessingOptions
-{
-    public bool CreateThumbnail { get; set; } = true;
-    public int ThumbnailMaxWidth { get; set; } = 200;
-    public int ThumbnailMaxHeight { get; set; } = 200;
-    public bool CreateCompressed { get; set; } = true;
-    public int CompressedMaxWidth { get; set; } = 1200;
-    public int CompressedMaxHeight { get; set; } = 1200;
-    public int JpegQuality { get; set; } = 85;
-
-    public IList<ImageSizeOption> AdditionalSizes { get; set; } = [];
-}
-
-public class ImageSizeOption
-{
-    public string SizeName { get; set; } = string.Empty;
-    public int MaxWidth { get; set; }
-    public int MaxHeight { get; set; }
-    public int JpegQuality { get; set; } = 80;
 }

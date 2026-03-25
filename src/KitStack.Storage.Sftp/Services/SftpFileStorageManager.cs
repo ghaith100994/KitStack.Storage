@@ -1,20 +1,23 @@
 using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Extensions;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Abstractions.Models;
+using KitStack.Abstractions.Options;
+using KitStack.Abstractions.Services;
+using KitStack.Abstractions.Utilities;
 using KitStack.Storage.Sftp.Options;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using FluentFTP;
-using KitStack.Abstractions.Utilities;
 
 namespace KitStack.Storage.Sftp.Services;
 
-public class SftpFileStorageManager : IFileStorageManager, IDisposable
+public class SftpFileStorageManager : FileStorageManagerBase, IDisposable
 {
     private readonly SftpOptions _options;
     private readonly FtpClient _client;
     private bool _disposed;
+
+    protected override string StorageProvider => "Sftp";
 
     public SftpFileStorageManager(IOptions<SftpOptions> options)
     {
@@ -47,7 +50,9 @@ public class SftpFileStorageManager : IFileStorageManager, IDisposable
         _client = client;
     }
 
-    public async Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default) where T : class
+    protected override ImageProcessingOptions? GetImageProcessingOptions() => _options.ImageProcessing;
+
+    public override async Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(file);
         if (string.IsNullOrWhiteSpace(category))
@@ -99,218 +104,44 @@ public class SftpFileStorageManager : IFileStorageManager, IDisposable
             Size = file.Length,
             ContentType = file.ContentType,
             UploadedTime = DateTimeOffset.UtcNow,
-            Category= category,
+            Category = category,
             Encrypted = false,
             FileExtension = extension,
             VariantType = "original",
-            StorageProvider = "Sftp",
+            StorageProvider = StorageProvider,
             LastAccessedTime = DateTimeOffset.UtcNow,
+            Metadata = new Dictionary<string, string>(),
         };
 
         return entry;
     }
 
-    public async Task<IFileEntry> CreateAsync<T>(T entity, IFormFile file, string? category, CancellationToken cancellationToken = default) where T : class, IFileAttachable
+    /// <summary>
+    /// Writes the processed JPEG to a temp file, uploads it via FTP, then returns the remote path.
+    /// </summary>
+    protected override async Task<string> StoreVariantAsync(
+        MemoryStream data,
+        string relativeFolder,
+        string variantFolder,
+        string fileName,
+        string variantType,
+        CancellationToken ct)
     {
-        var primary = await CreateAsync<T>(file, category, cancellationToken).ConfigureAwait(false);
-        entity.AddFileAttachment(primary);
-        primary.LinkToEntity(entity, category ?? typeof(T).Name);
-        return primary;
-    }
-
-    public async Task<(IFileEntry Primary, List<IFileEntry> Variants)> CreateWithVariantsAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default) where T : class
-    {
-        // First create the primary/original file (reuse logic)
-        var primary = await CreateAsync<T>(file, category, cancellationToken).ConfigureAwait(false);
-
-        var variants = new List<IFileEntry>();
-
-        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        var ip = _options.ImageProcessing;
-        if (!ImageProcessingHelper.IsImageExtension(extension) || ip == null)
-            return (primary, variants); // no image-processing required
-
-        // Read bytes into memory once for variant creation
-        await using var stream = file.OpenReadStream();
-        using var ms = new MemoryStream();
-        await stream.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
-        var bytes = ms.ToArray();
-
-        // remote relative paths are provider relative, reuse primary.FileLocation
-        var relativeFolderPath = Path.GetDirectoryName(primary.FileLocation) ?? string.Empty;
-        var uploadFolder = Path.Combine(Path.GetTempPath(), "kitstack-ftp-variants", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(uploadFolder);
-        var fileGuid = ResolveFileIdentifier(primary.Id);
-
+        var tempFile = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         try
         {
-            if (ip.CreateCompressed)
-            {
-                var (compressedRelative, compressedSize) = await CreateCompressedVariantAsync(bytes, uploadFolder, relativeFolderPath, fileGuid, ip, cancellationToken).ConfigureAwait(false);
-                var compressedEntry = BuildVariantFileEntry(compressedRelative, compressedSize, "compressed", primary.FileExtension, "Sftp");
-                compressedEntry.CopyRelationsFrom(primary);
-                compressedEntry.Metadata ??= new Dictionary<string, string>();
-                compressedEntry.Category = category;
-                compressedEntry.Encrypted = false;
-                variants.Add(compressedEntry);
+            await using (var fileOut = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+                await data.CopyToAsync(fileOut, ct).ConfigureAwait(false);
 
-                primary.Metadata ??= new Dictionary<string, string>();
-                primary.Metadata["CompressedPath"] = compressedRelative;
-            }
-
-            if (ip.CreateThumbnail)
-            {
-                var (thumbRelative, thumbSize) = await CreateThumbnailVariantAsync(bytes, uploadFolder, relativeFolderPath, fileGuid, ip, cancellationToken).ConfigureAwait(false);
-                var thumbEntry = BuildVariantFileEntry(thumbRelative, thumbSize, "thumbnail", primary.FileExtension, "Sftp");
-                thumbEntry.CopyRelationsFrom(primary);
-                thumbEntry.Metadata ??= new Dictionary<string, string>();
-                thumbEntry.Category = category;
-                thumbEntry.Encrypted = false;
-
-                variants.Add(thumbEntry);
-
-                primary.Metadata ??= new Dictionary<string, string>();
-                primary.Metadata["ThumbnailPath"] = thumbRelative;
-            }
-
-            // Additional sizes
-            if (ip.AdditionalSizes != null && ip.AdditionalSizes.Count > 0)
-            {
-                var additionalPaths = new List<string>();
-                foreach (var size in ip.AdditionalSizes)
-                {
-                    if (string.IsNullOrWhiteSpace(size.SizeName)) continue;
-                    var (variantPath, variantSize) = await CreateAdditionalVariantAsync(bytes, uploadFolder, relativeFolderPath, size, cancellationToken).ConfigureAwait(false);
-                    var ve = BuildVariantFileEntry(variantPath, variantSize, size.SizeName, primary.FileExtension, "Sftp");
-                    ve.CopyRelationsFrom(primary);
-                    ve.Metadata ??= new Dictionary<string, string>();
-                    ve.Category = category;
-                    ve.Encrypted = false;
-                    variants.Add(ve);
-                    additionalPaths.Add(variantPath);
-                }
-
-                if (additionalPaths.Count > 0)
-                {
-                    primary.Metadata ??= new Dictionary<string, string>();
-                    primary.Metadata["Variants"] = string.Join(';', additionalPaths);
-                }
-            }
-
-            return (primary, variants);
+            var remotePath = $"{relativeFolder}/{variantFolder}/{fileName}".Replace('\\', '/').TrimStart('/');
+            EnsureConnected();
+            _client.UploadFile(tempFile, remotePath, FtpRemoteExists.Overwrite, createRemoteDir: true);
+            return remotePath;
         }
         finally
         {
-            try { if (Directory.Exists(uploadFolder)) Directory.Delete(uploadFolder, true); } catch { }
+            try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { }
         }
-    }
-
-    private static FileEntry BuildVariantFileEntry(string relativePath, long size, string? variantType, string? fileExtension, string storageProvider)
-    {
-        var entry = new FileEntry
-        {
-            Id = Guid.NewGuid(),
-            FileName = Path.GetFileName(relativePath),
-            FileLocation = relativePath,
-            Size = size,
-            ContentType = "image/jpeg",
-            FileExtension = fileExtension,
-            UploadedTime = DateTimeOffset.UtcNow,
-            VariantType = variantType,
-            StorageProvider = storageProvider,
-            OriginalFileName = Path.GetFileName(relativePath),
-            LastAccessedTime = DateTimeOffset.UtcNow,
-        };
-
-        return entry;
-    }
-
-    private async Task<(string RelativePath, long Size)> CreateCompressedVariantAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, Guid fileId, ImageProcessingOptions options, CancellationToken cancellationToken)
-    {
-        var compressedFolder = Path.Combine(uploadFolder, "compressed");
-        if (!Directory.Exists(compressedFolder))
-            Directory.CreateDirectory(compressedFolder);
-
-        var fileName = $"{fileId:N}.jpg";
-        var compressedFull = Path.Combine(compressedFolder, fileName);
-
-        using var src = new MemoryStream(bytes);
-        await using var outStream = new MemoryStream();
-        await ImageProcessingHelper.CreateResizedJpegToStreamAsync(src, outStream,
-            options.CompressedMaxWidth,
-            options.CompressedMaxHeight,
-            options.JpegQuality,
-            cancellationToken).ConfigureAwait(false);
-
-        var variantSize = outStream.Length;
-        outStream.Seek(0, SeekOrigin.Begin);
-        await using (var fileOut = new FileStream(compressedFull, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-        {
-            await outStream.CopyToAsync(fileOut, cancellationToken).ConfigureAwait(false);
-        }
-
-        // Upload compressed to remote via FTP
-        var remoteRelative = Path.Combine(relativeFolderPath, "compressed", fileName).Replace('\\', '/');
-        EnsureConnected();
-        _client.UploadFile(compressedFull, remoteRelative, FtpRemoteExists.Overwrite, createRemoteDir: true);
-        return (remoteRelative, variantSize);
-    }
-
-    private async Task<(string RelativePath, long Size)> CreateThumbnailVariantAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, Guid fileId, ImageProcessingOptions options, CancellationToken cancellationToken)
-    {
-        var thumbsFolder = Path.Combine(uploadFolder, "thumbnails");
-        if (!Directory.Exists(thumbsFolder))
-            Directory.CreateDirectory(thumbsFolder);
-
-        var fileName = $"{fileId:N}.jpg";
-        var thumbFull = Path.Combine(thumbsFolder, fileName);
-
-        using var src = new MemoryStream(bytes);
-        await using var outStream = new MemoryStream();
-        await ImageProcessingHelper.CreateResizedJpegToStreamAsync(src, outStream,
-            options.ThumbnailMaxWidth,
-            options.ThumbnailMaxHeight,
-            options.JpegQuality,
-            cancellationToken).ConfigureAwait(false);
-
-        var variantSize = outStream.Length;
-        outStream.Seek(0, SeekOrigin.Begin);
-        await using (var fileOut = new FileStream(thumbFull, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-        {
-            await outStream.CopyToAsync(fileOut, cancellationToken).ConfigureAwait(false);
-        }
-
-        var remoteRelative = Path.Combine(relativeFolderPath, "thumbnails", fileName).Replace('\\', '/');
-        EnsureConnected();
-        _client.UploadFile(thumbFull, remoteRelative, FtpRemoteExists.Overwrite, createRemoteDir: true);
-        return (remoteRelative, variantSize);
-    }
-
-    private async Task<(string RelativePath, long Size)> CreateAdditionalVariantAsync(byte[] bytes, string uploadFolder, string relativeFolderPath, ImageSizeOption size, CancellationToken cancellationToken)
-    {
-        var sizeFolder = Path.Combine(uploadFolder, size.SizeName);
-        if (!Directory.Exists(sizeFolder))
-            Directory.CreateDirectory(sizeFolder);
-
-        var sizeFileName = $"{Guid.NewGuid():N}.jpg";
-        var sizeFullPath = Path.Combine(sizeFolder, sizeFileName);
-
-        using var src = new MemoryStream(bytes);
-        await using var outStream = new MemoryStream();
-        await ImageProcessingHelper.CreateResizedJpegToStreamAsync(src, outStream, size.MaxWidth, size.MaxHeight, size.JpegQuality, cancellationToken)
-            .ConfigureAwait(false);
-
-        var variantSize = outStream.Length;
-        outStream.Seek(0, SeekOrigin.Begin);
-        await using (var fileOut = new FileStream(sizeFullPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-        {
-            await outStream.CopyToAsync(fileOut, cancellationToken).ConfigureAwait(false);
-        }
-
-        var remoteRelative = Path.Combine(relativeFolderPath, size.SizeName, sizeFileName).Replace('\\', '/');
-        EnsureConnected();
-        _client.UploadFile(sizeFullPath, remoteRelative, FtpRemoteExists.Overwrite, createRemoteDir: true);
-        return (remoteRelative, variantSize);
     }
 
     private static string CombineRemotePath(params string?[] parts)
@@ -328,14 +159,6 @@ public class SftpFileStorageManager : IFileStorageManager, IDisposable
         _client.Connect();
     }
 
-    private static Guid ResolveFileIdentifier(DefaultIdType id)
-    {
-        return id switch
-        {
-            Guid guid => guid,
-            _ => Guid.TryParse(id.ToString(), out var parsed) ? parsed : Guid.NewGuid()
-        };
-    }
 
     public void Dispose()
     {

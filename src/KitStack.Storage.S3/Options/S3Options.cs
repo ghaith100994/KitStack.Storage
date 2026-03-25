@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using KitStack.Abstractions.Options;
 
 namespace KitStack.Storage.S3.Options;
 
@@ -17,7 +18,7 @@ public class S3Options : IValidatableObject
 
     public int PresignedUrlExpirationSeconds { get; set; } = 900; // 15 minutes
 
-    public ImageProcessingOptions? ImageProcessing { get; set; }
+    public S3ImageProcessingOptions? ImageProcessing { get; set; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -61,9 +62,10 @@ public class S3Options : IValidatableObject
                         results.Add(new ValidationResult($"ImageProcessing.AdditionalSizes[{i}].SizeName is required.", [$"{nameof(ImageProcessing)}.{nameof(ImageProcessing.AdditionalSizes)}[{i}].{nameof(s.SizeName)}"]));
                     if (s.MaxWidth <= 0 || s.MaxHeight <= 0)
                         results.Add(new ValidationResult($"ImageProcessing.AdditionalSizes[{i}] must have positive MaxWidth/MaxHeight.", [$"{nameof(ImageProcessing)}.{nameof(ImageProcessing.AdditionalSizes)}[{i}]"]));
-                    if (s.Target != null && string.IsNullOrWhiteSpace(s.Target.BucketName))
-                        results.Add(new ValidationResult($"ImageProcessing.AdditionalSizes[{i}].Target.BucketName is required when a Target is provided.", [$"{nameof(ImageProcessing)}.{nameof(ImageProcessing.AdditionalSizes)}[{i}].{nameof(s.Target)}.{nameof(s.Target.BucketName)}"]));
-                    CheckTarget(s.Target, $"{nameof(ImageProcessing)}.{nameof(ImageProcessing.AdditionalSizes)}[{i}].{nameof(s.Target)}");
+                    if (s is S3ImageSizeOption s3Size && s3Size.Target != null && string.IsNullOrWhiteSpace(s3Size.Target.BucketName))
+                        results.Add(new ValidationResult($"ImageProcessing.AdditionalSizes[{i}].Target.BucketName is required when a Target is provided.", [$"{nameof(ImageProcessing)}.{nameof(ImageProcessing.AdditionalSizes)}[{i}].Target.BucketName"]));
+                    if (s is S3ImageSizeOption s3SizeTarget)
+                        CheckTarget(s3SizeTarget.Target, $"{nameof(ImageProcessing)}.{nameof(ImageProcessing.AdditionalSizes)}[{i}].Target");
                 }
             }
         }
@@ -72,43 +74,24 @@ public class S3Options : IValidatableObject
     }
 }
 
-// Image processing options used by S3 manager when creating variants.
-public class ImageProcessingOptions
+/// <summary>
+/// Extends <see cref="ImageProcessingOptions"/> with S3-specific per-variant target routing.
+/// </summary>
+public class S3ImageProcessingOptions : ImageProcessingOptions
 {
-    public bool CreateThumbnail { get; set; } = true;
-    public int ThumbnailMaxWidth { get; set; } = 200;
-    public int ThumbnailMaxHeight { get; set; } = 200;
-    public bool CreateCompressed { get; set; } = true;
-    public int CompressedMaxWidth { get; set; } = 1200;
-    public int CompressedMaxHeight { get; set; } = 1200;
-    public int JpegQuality { get; set; } = 85;
-
-    /// <summary>
-    /// Optional: target storage settings for compressed variant. If null, compressed variant will be uploaded to the main bucket/prefix.
-    /// </summary>
+    /// <summary>Optional target for the compressed variant. Falls back to the main target when null.</summary>
     public S3TargetOptions? CompressedTarget { get; set; }
 
-    /// <summary>
-    /// Optional: target storage settings for thumbnail variant. If null, thumbnail will be uploaded to the main bucket/prefix.
-    /// </summary>
+    /// <summary>Optional target for the thumbnail variant. Falls back to the main target when null.</summary>
     public S3TargetOptions? ThumbnailTarget { get; set; }
-
-    /// <summary>
-    /// Additional sizes to create. Each size may specify its own target settings.
-    /// </summary>
-    public IList<ImageSizeOption> AdditionalSizes { get; set; } = [];
 }
 
-public class ImageSizeOption
+/// <summary>
+/// Extends <see cref="ImageSizeOption"/> with an optional S3 target for per-size routing.
+/// </summary>
+public class S3ImageSizeOption : ImageSizeOption
 {
-    public string SizeName { get; set; } = string.Empty;
-    public int MaxWidth { get; set; }
-    public int MaxHeight { get; set; }
-    public int JpegQuality { get; set; } = 80;
-
-    /// <summary>
-    /// Optional target storage settings for this size variant. If null, the main bucket/prefix is used.
-    /// </summary>
+    /// <summary>Optional S3 target for this size. Falls back to the main target when null.</summary>
     public S3TargetOptions? Target { get; set; }
 }
 

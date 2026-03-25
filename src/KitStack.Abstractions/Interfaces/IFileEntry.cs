@@ -21,10 +21,18 @@ public interface IFileEntry
     string FileName { get; set; }
 
     /// <summary>
-    /// Logical or provider-specific location/key for the stored file (for example "app/images/2026/photo.jpg" or an S3 key).
+    /// Provider-relative location/key for the stored file, without the base directory
+    /// (for example "category/Entity/Images/abc.jpg" or an S3 key).
     /// This value is intended to be persisted by callers and used to retrieve the file from the provider.
     /// </summary>
     string FileLocation { get; set; }
+
+    /// <summary>
+    /// Full storage path including the configured base directory
+    /// (for example "Files/category/Entity/Images/abc.jpg").
+    /// Useful for serving files directly or constructing absolute URLs.
+    /// </summary>
+    string? StoragePath { get; set; }
 
     /// <summary>
     /// Optional logical category or module name used to group files (for example "Users" or "Products").

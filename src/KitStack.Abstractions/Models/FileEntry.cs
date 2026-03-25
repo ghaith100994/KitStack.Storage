@@ -14,6 +14,8 @@ public class FileEntry : IFileEntry
 
     public string FileLocation { get; set; } = string.Empty;
 
+    public string? StoragePath { get; set; }
+
     public string? Category { get; set; } = string.Empty;
 
     public long Size { get; set; }
