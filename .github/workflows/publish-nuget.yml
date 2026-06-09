@@ -1,88 +1,173 @@
-name: Publish NuGet
+name: Publish NuGet packages
+
+# Packs and publishes KitStack.* packages to nuget.org when a tag like v1.2.3 is pushed.
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to publish (e.g. 1.2.3 or 1.2.3-beta.1)'
-        required: true
+
+concurrency:
+  group: publish-nuget-${{ github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
-  id-token: write  # Required for Trusted Publishing
-concurrency:
-  group: publish-nuget-${{ github.ref }}
-  cancel-in-progress: false
+
 env:
-  DOTNET_VERSION: '10.0.x'
-  CONFIGURATION: Release
-  NUGET_FEED: https://api.nuget.org/v3/index.json
-  DOTNET_NOLOGO: 'true'
-  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
-  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  PACK_OUTPUT: ./nupkg
+
 jobs:
-  publish:
+  build-pack-publish:
     runs-on: ubuntu-latest
-    environment: nuget
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-      - name: Determine version
-        id: version
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            # strip the leading "v" from the tag (refs/tags/v1.2.3 -> 1.2.3)
-            VERSION="${GITHUB_REF_NAME#v}"
-          fi
-          if [ -z "$VERSION" ]; then
-            echo "::error::Could not determine a version to publish."
-            exit 1
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Publishing version: $VERSION"
+          fetch-depth: 0
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '10.0.x'
+
       - name: Restore
         run: dotnet restore
-      - name: Build
-        run: >
-          dotnet build
-          --configuration $CONFIGURATION
-          --no-restore
-          -p:Version=${{ steps.version.outputs.version }}
-          -p:ContinuousIntegrationBuild=true
-      - name: Test
-        shell: bash
+
+      - name: Build (produce portable PDBs)
+        # Build all projects so pack --no-build can consume the exact outputs.
+        run: dotnet build -c Release -p:DebugType=portable -p:DebugSymbols=true --no-restore
+
+      - name: Extract version from tag
+        id: vars
         run: |
-          if find . -name '*Tests.csproj' -o -name '*.Tests.csproj' | grep -q .; then
-            dotnet test --configuration $CONFIGURATION --no-build --verbosity normal
-          else
-            echo "No test projects found; skipping tests."
+          TAG="${GITHUB_REF##*/}"
+          # Allow tags like v1.2.3 or 1.2.3
+          RAW="${TAG#v}"
+          echo "version=${RAW}" >> $GITHUB_OUTPUT
+
+      - name: Pack dependencies (nupkg + snupkg)
+        run: |
+          set -euo pipefail
+          VERSION=${{ steps.vars.outputs.version }}
+          mkdir -p $PACK_OUTPUT
+
+          echo "Packing KitStack.Abstractions v$VERSION"
+          dotnet pack src/KitStack.Abstractions/KitStack.Abstractions.csproj \
+            -c Release -o $PACK_OUTPUT --no-build \
+            /p:Version=$VERSION /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg
+
+          echo "Packing KitStack.Storage.Local v$VERSION"
+          dotnet pack src/KitStack.Storage.Local/KitStack.Storage.Local.csproj \
+            -c Release -o $PACK_OUTPUT --no-build \
+            /p:Version=$VERSION /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg
+
+          echo "Packing KitStack.Storage.S3 v$VERSION"
+          dotnet pack src/KitStack.Storage.S3/KitStack.Storage.S3.csproj \
+            -c Release -o $PACK_OUTPUT --no-build \
+            /p:Version=$VERSION /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg
+
+          echo "Packing KitStack.Storage.Sftp v$VERSION"
+          dotnet pack src/KitStack.Storage.Sftp/KitStack.Storage.Sftp.csproj \
+            -c Release -o $PACK_OUTPUT --no-build \
+            /p:Version=$VERSION /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg
+
+          echo "Packing KitStack.Fakes v$VERSION"
+          dotnet pack src/KitStack.Fakes/KitStack.Fakes.csproj \
+            -c Release -o $PACK_OUTPUT --no-build \
+            /p:Version=$VERSION /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg
+
+      - name: Pack KitStack.AspNetCore (nupkg + snupkg)
+        run: |
+          set -euo pipefail
+          VERSION=${{ steps.vars.outputs.version }}
+          mkdir -p $PACK_OUTPUT
+
+          echo "Packing KitStack.AspNetCore v$VERSION"
+          dotnet pack src/KitStack.AspNetCore/KitStack.AspNetCore.csproj \
+            -c Release -o $PACK_OUTPUT --no-build \
+            /p:Version=$VERSION /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg
+
+      - name: List produced packages
+        run: ls -la $PACK_OUTPUT || true
+
+      - name: Validate nupkg/snupkg pairs (basic DLL <-> PDB match)
+        run: |
+          set -euo pipefail
+          PACK_DIR=$PACK_OUTPUT
+          echo "Validating nupkg/snupkg pairs in $PACK_DIR"
+
+          # For each nupkg, check if a corresponding snupkg exists and ensure that every DLL base-name in nupkg has a matching PDB in snupkg
+          for n in "$PACK_DIR"/*.nupkg; do
+            [ -f "$n" ] || continue
+            base=$(basename "$n" .nupkg)
+            sn="$PACK_DIR/$base.snupkg"
+            if [ -f "$sn" ]; then
+              echo "Validating $base.nupkg <-> $base.snupkg"
+              # list dll base-names in nupkg under lib/
+              dlls=$(unzip -l "$n" | awk '{print $4}' | grep -E '^lib/.*\.dll$' | xargs -n1 basename | sed 's/\.dll$//' | sort -u || true)
+              # list pdb base-names in snupkg
+              pdbs=$(unzip -l "$sn" | awk '{print $4}' | grep -E '\.pdb$' | xargs -n1 basename | sed 's/\.pdb$//' | sort -u || true)
+
+              missing=""
+              for d in $dlls; do
+                if ! echo "$pdbs" | grep -qx "$d"; then
+                  missing="$missing $d"
+                fi
+              done
+
+              if [ -n "$missing" ]; then
+                echo "ERROR: symbol mismatch for $base: PDBs missing for:$missing"
+                echo "Contents of $n:"
+                unzip -l "$n"
+                echo "Contents of $sn:"
+                unzip -l "$sn"
+                exit 1
+              else
+                echo "OK: $base contains matching DLLs and PDBs."
+              fi
+            else
+              echo "No symbol package produced for $base (skipping symbol validation)."
+            fi
+          done
+
+      - name: Publish to NuGet (push all nupkg + snupkg)
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NUGET_API_KEY:-}" ]; then
+            echo "NUGET_API_KEY secret is not set. Skipping publish."
+            exit 78
           fi
-      - name: Pack
-        run: >
-          dotnet pack
-          --configuration $CONFIGURATION
-          --no-build
-          --output ./artifacts
-          -p:PackageVersion=${{ steps.version.outputs.version }}
-          -p:IncludeSymbols=true
-          -p:SymbolPackageFormat=snupkg
-      - name: Push to NuGet
-        run: >
-          dotnet nuget push "./artifacts/*.nupkg"
-          --source "$NUGET_FEED"
-          --skip-duplicate
-      - name: Upload packages as build artifact
-        if: always()
+
+          echo "Pushing packages in $PACK_OUTPUT to nuget.org"
+          for pkg in $PACK_OUTPUT/*.nupkg; do
+            # skip legacy .symbols.nupkg if present
+            if [[ "$pkg" == *".symbols.nupkg" ]]; then
+              continue
+            fi
+            echo "Pushing $pkg"
+            dotnet nuget push "$pkg" -k "$NUGET_API_KEY" -s https://api.nuget.org/v3/index.json --skip-duplicate
+          done
+
+          # push any snupkg symbol packages
+          for sym in $PACK_OUTPUT/*.snupkg; do
+            [ -f "$sym" ] || continue
+            echo "Pushing symbol package $sym"
+            dotnet nuget push "$sym" -k "$NUGET_API_KEY" -s https://api.nuget.org/v3/index.json --skip-duplicate
+          done
+
+      - name: Upload built packages as workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nuget-packages
-          path: ./artifacts/*.*nupkg
-          if-no-files-found: warn
+          name: kitstack-packages-${{ github.ref_name }}
+          path: ${{ env.PACK_OUTPUT }}
