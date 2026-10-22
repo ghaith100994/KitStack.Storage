@@ -14,6 +14,11 @@
         <Version>0.1.5</Version>
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     </PropertyGroup>
+  <!-- ImageSharp 4+ validates a Six Labors license at build time. The key is never committed:
+       CI supplies it from the SIXLABORS_LICENSE_KEY GitHub secret; locally set the same env var. -->
+  <PropertyGroup Condition="'$(SixLaborsLicenseKey)' == '' and '$(SIXLABORS_LICENSE_KEY)' != ''">
+    <SixLaborsLicenseKey>$(SIXLABORS_LICENSE_KEY)</SixLaborsLicenseKey>
+  </PropertyGroup>
   <ItemGroup>
     <Using Include="System.Guid" Alias="DefaultIdType" />
   </ItemGroup>
