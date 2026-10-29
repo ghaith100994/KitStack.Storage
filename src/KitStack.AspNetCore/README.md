@@ -1,19 +1,35 @@
 # KitStack.AspNetCore
 
-KitStack.AspNetCore contains ASP.NET Core integration helpers for the KitStack storage providers.
+ASP.NET Core integration for KitStack.Storage. Since 0.2 this package references no provider SDK; add the
+provider packages you use (`KitStack.Storage.Local`, `.S3`, `.Azure`, `.Sftp`, `.Ftp`) and register them on the
+builder returned by `AddKitStackStorage` (which now lives in `KitStack.Abstractions`).
 
-This package provides utilities for serving files, registering fake/in-memory storage for testing,
-and wiring up the local filesystem storage implementation when running in development.
+## Serving files
 
-Usage
------
+```csharp
+builder.Services.AddKitStackStorage(builder.Configuration).AddLocal();
 
-- Register the desired storage provider in `Startup` / `Program`.
-- Use the `IFileStorageManager` abstraction to upload and retrieve files.
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapKitStackStorageFiles("/files", o =>
+    o.Authorize = (http, file) => ValueTask.FromResult(http.User.IsInRole("Archive")));
+```
 
-For full documentation and examples, see the project repository:
-https://github.com/ghaith100994/KitStack.Storage
+- `GET /files/{location}` and, with an `IFileEntryStore`, `GET /files/{id}`.
+- Requires an authenticated user by default. Chain `.RequireAuthorization("policy")` or `.AllowAnonymous()`.
+- Works for every provider, decrypts encrypted files, supports range requests and sends ETag/Last-Modified.
+- Images, audio, video, PDF and plain text are served inline. Everything else (HTML, SVG, scripts, ...) is sent as
+  an attachment, with `X-Content-Type-Options: nosniff` and a sandboxing CSP.
+- With an `IFileEntryStore` registered, only recorded, non-deleted files are served.
 
-License
--------
-Apache-2.0
+Inside your own controllers:
+
+```csharp
+await using var stream = await storage.OpenReadAsync(entry);
+return File(stream, entry.ContentType);
+```
+
+## Anonymous static files (0.1 behaviour, opt-in)
+
+`app.UseKitStackStorage(configuration)` only serves the Local directory as anonymous static files when
+`Storage:Local:ServeAnonymously` is `true`.

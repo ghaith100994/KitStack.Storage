@@ -1,54 +1,37 @@
 using KitStack.Storage.Sftp.Options;
+using KitStack.Storage.Sftp.Services;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
-using FluentFTP;
 
 namespace KitStack.Storage.Sftp.HealthChecks;
 
-public sealed class SftpHealthCheck : IHealthCheck, IDisposable
+/// <summary>Health check that opens an SFTP session and checks the remote base path.</summary>
+public sealed class SftpHealthCheck : IHealthCheck
 {
     private readonly SftpOptions _options;
-    private bool _disposed;
 
     public SftpHealthCheck(IOptions<SftpOptions> options)
     {
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
-    public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
         try
         {
-            using var client = new FtpClient(_options.Host, _options.Username ?? string.Empty, _options.Password ?? string.Empty);
-            client.Port = _options.Port;
-            client.Connect();
-
-            if (!string.IsNullOrWhiteSpace(_options.RemotePath))
-            {
-                var path = _options.RemotePath.Trim('/');
-                var list = client.GetListing(path);
-            }
-
+            using var client = SftpClientFactory.Create(_options);
+            await client.ConnectAsync(cancellationToken).ConfigureAwait(false);
+            var path = string.IsNullOrWhiteSpace(_options.RemotePath) ? "Files" : _options.RemotePath;
+            var exists = await client.ExistsAsync(path, cancellationToken).ConfigureAwait(false);
             client.Disconnect();
-            return Task.FromResult(HealthCheckResult.Healthy("FTP reachable"));
+            return exists || _options.EnsureRemotePathExists
+                ? HealthCheckResult.Healthy("SFTP reachable")
+                : new HealthCheckResult(context.Registration.FailureStatus, $"Remote path '{path}' does not exist.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return Task.FromResult(new HealthCheckResult(context.Registration.FailureStatus, exception: ex));
-        }
-    }
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    private void Dispose(bool disposing)
-    {
-        if (!_disposed)
-        {
-            _disposed = true;
+            return new HealthCheckResult(context.Registration.FailureStatus, exception: ex);
         }
     }
 }

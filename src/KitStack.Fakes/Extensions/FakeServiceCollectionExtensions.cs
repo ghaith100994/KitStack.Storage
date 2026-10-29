@@ -1,4 +1,5 @@
-﻿using KitStack.Abstractions.Interfaces;
+using KitStack.Abstractions.DependencyInjection;
+using KitStack.Abstractions.Interfaces;
 using KitStack.Fakes.Contracts;
 using KitStack.Fakes.Options;
 using KitStack.Fakes.Services;
@@ -13,6 +14,18 @@ namespace KitStack.Fakes.Extensions;
 /// </summary>
 public static class FakeServiceCollectionExtensions
 {
+    /// <summary>
+    /// Register the in-memory fake provider, bound from the <c>Fake</c> sub-section of the storage configuration.
+    /// </summary>
+    public static KitStackStorageBuilder AddFake(this KitStackStorageBuilder builder, Action<FakeOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.Services.AddInMemoryFakeStorage(builder.Configuration.GetSection("Fake"));
+        if (configure is not null)
+            builder.Services.Configure(configure);
+        return builder;
+    }
+
     /// <summary>
     /// Register the in-memory fake storage manager and optional configuration.
     /// Returns IServiceCollection for chaining.

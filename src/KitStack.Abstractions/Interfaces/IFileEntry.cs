@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using KitStack.Abstractions.Models;
 
@@ -46,9 +46,25 @@ public interface IFileEntry
     long Size { get; set; }
 
     /// <summary>
-    /// Optional MIME/content type (for example "image/jpeg").
+    /// MIME/content type (for example "image/jpeg").
+    /// Providers resolve this from the stored bytes and file extension; the value declared by the
+    /// uploading client is never taken on trust. Defaults to "application/octet-stream".
     /// </summary>
-    string? ContentType { get; set; }
+    string ContentType { get; set; }
+
+    /// <summary>
+    /// Lower-case hex SHA-256 of the file content (plaintext, before any encryption),
+    /// computed while the file is written. <c>null</c> for entries created by older versions.
+    /// </summary>
+    /// <remarks>
+    /// Has a default implementation so existing <see cref="IFileEntry"/> implementations keep compiling;
+    /// implement it with a real backing field to keep the checksum.
+    /// </remarks>
+    string? Checksum
+    {
+        get => null;
+        set { }
+    }
 
     /// <summary>
     /// Optional file extension including the leading dot (for example ".jpg").

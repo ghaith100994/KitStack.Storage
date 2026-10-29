@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -10,6 +10,7 @@ namespace KitStack.AspNetCore.Db;
 /// should be implemented in the infrastructure layer or by calling provider-specific registration code
 /// to avoid bringing heavy SDK dependencies into this package.
 /// </summary>
+[Obsolete("Use KitStack.Storage.EntityFrameworkCore (AddKitStackStorageDbContext or AddEntityFrameworkCoreStore<TContext>). This placeholder only binds options and will be removed.")]
 public static class BindSeparateDbContextExtensions
 {
     /// <summary>

@@ -1,20 +1,15 @@
 # KitStack.Abstractions
 
-KitStack.Abstractions contains lightweight interfaces, DTOs and utilities for the KitStack storage providers.
+Interfaces, models and the shared provider pipeline for KitStack.Storage.
 
-This package provides the core abstractions used across provider implementations (for example `IFileStorageManager`, `IFileEntry`) and small concrete DTOs useful for samples and tests.
-
-Usage
------
-
-- Reference the project or package from provider or application projects that need to implement or consume storage abstractions.
-- Use the `IFileStorageManager` abstraction in application code to remain provider-agnostic.
-
-For full documentation and examples, see the project repository:
-https://github.com/ghaith100994/KitStack.Storage
-
-License
--------
-Apache-2.0
-
-
+- `IFileStorageManager`: `CreateAsync` (form file or stream), `CreateWithVariantsAsync`, `OpenReadAsync`,
+  `ExistsAsync`, `DeleteAsync`, `GetUrlAsync`. Helpers: `ReplaceAsync`, and `StoredFileRef` overloads.
+- `IFileEntry` with a resolved `ContentType` and a SHA-256 `Checksum`.
+- `StoredFileRef`: value object entities store instead of repeating file columns.
+- `IFileEntryStore`: metadata store contract (EF Core implementation in KitStack.Storage.EntityFrameworkCore).
+- `UploadPolicy` (`Storage:Upload`): `MaxBytes`, `AllowedContentTypes`, `AllowedExtensions`.
+- Encryption at rest: set `Storage:MasterEncryptionKey` (base64, 32 bytes) to encrypt every new file with
+  AES-256-GCM; `Storage:PreviousEncryptionKeys` keeps old keys readable after rotation.
+- `FileStorageManagerBase`: providers implement five primitives and inherit validation, the policy,
+  content-type resolution, checksums, encryption and image variants.
+- `AddKitStackStorage(...)` returns a builder that provider packages extend (`AddLocal()`, `AddS3()`, ...).

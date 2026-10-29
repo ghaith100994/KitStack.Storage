@@ -1,5 +1,5 @@
-﻿using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
+using KitStack.Abstractions.DependencyInjection;
+using KitStack.Abstractions.Interfaces;
 using KitStack.Storage.Local.HealthChecks;
 using KitStack.Storage.Local.Options;
 using KitStack.Storage.Local.Services;
@@ -10,17 +10,32 @@ namespace KitStack.Storage.Local.Extensions;
 
 /// <summary>
 /// Registration helpers for the Local provider.
-/// Consumers can call AddLocalStorageManager to register LocalOptions and LocalFileStorageManager.
 /// </summary>
 public static class LocalServiceCollectionExtensions
 {
+    /// <summary>
+    /// Register the Local provider from the <c>Local</c> sub-section of the storage configuration
+    /// (<c>Storage:Local</c>), plus a <c>kitstack_local</c> health check.
+    /// </summary>
+    public static KitStackStorageBuilder AddLocal(this KitStackStorageBuilder builder, Action<LocalOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.Services.AddLocalStorageManager(builder.Configuration);
+        if (configure is not null)
+            builder.Services.Configure(configure);
+        builder.Services.AddHealthChecks().AddCheck<LocalFileHealthCheck>("kitstack_local");
+        return builder;
+    }
+
+    /// <summary>
+    /// Register LocalOptions (bound from the <c>Local</c> sub-section of <paramref name="configuration"/>)
+    /// and <see cref="LocalFileStorageManager"/>.
+    /// </summary>
     public static IServiceCollection AddLocalStorageManager(this IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
-        // Bind Storage:Local or a provided section
         var section = configuration.GetSection("Local");
-        // Use the configuration binder to bind the section to LocalOptions via an Action<T>
-        services.Configure<LocalOptions>(opts => section.Bind(opts));
+        services.Configure<LocalOptions>(section.Bind);
 
         services.AddSingleton<LocalFileHealthCheck>();
         services.AddSingleton<IFileStorageManager, LocalFileStorageManager>();
@@ -28,6 +43,7 @@ public static class LocalServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>Register the Local provider with an options instance.</summary>
     public static IServiceCollection AddLocalStorageManager(this IServiceCollection services, LocalOptions options)
     {
         services.AddSingleton(_ => Microsoft.Extensions.Options.Options.Create(options));

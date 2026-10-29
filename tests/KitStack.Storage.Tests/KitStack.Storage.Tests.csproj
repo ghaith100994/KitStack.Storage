@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsPublishable>false</IsPublishable>
+    <IsTestProject>true</IsTestProject>
+    <!-- Test code: relax library-grade analyzers. -->
+    <AnalysisMode>Default</AnalysisMode>
+    <NoWarn>$(NoWarn);CA1707;CA2007;CA1515;CA1861</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\KitStack.Abstractions\KitStack.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\KitStack.AspNetCore\KitStack.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\KitStack.Fakes\KitStack.Fakes.csproj" />
+    <ProjectReference Include="..\..\src\KitStack.Storage.Local\KitStack.Storage.Local.csproj" />
+    <ProjectReference Include="..\..\src\KitStack.Storage.EntityFrameworkCore\KitStack.Storage.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\KitStack.Storage.Azure\KitStack.Storage.Azure.csproj" />
+    <ProjectReference Include="..\..\src\KitStack.Storage.Sftp\KitStack.Storage.Sftp.csproj" />
+    <ProjectReference Include="..\..\src\KitStack.Storage.Ftp\KitStack.Storage.Ftp.csproj" />
+    <ProjectReference Include="..\..\src\KitStack.Storage.S3\KitStack.Storage.S3.csproj" />
+  </ItemGroup>
+</Project>

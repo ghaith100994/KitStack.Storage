@@ -1,13 +1,11 @@
-﻿using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
-using KitStack.Abstractions.Options;
-using KitStack.Abstractions.Services;
-using KitStack.Abstractions.Utilities;
-using KitStack.Storage.Local.Options;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Options;
 using System.Runtime.InteropServices;
+using KitStack.Abstractions.Exceptions;
+using KitStack.Abstractions.Interfaces;
+using KitStack.Abstractions.Options;
+using KitStack.Abstractions.Security;
+using KitStack.Abstractions.Services;
+using KitStack.Storage.Local.Options;
+using Microsoft.Extensions.Options;
 
 namespace KitStack.Storage.Local.Services;
 
@@ -22,14 +20,18 @@ public class LocalFileStorageManager : FileStorageManagerBase
 
     protected override string StorageProvider => "Local";
 
-    public LocalFileStorageManager(IOptions<LocalOptions> option)
+    public LocalFileStorageManager(
+        IOptions<LocalOptions> option,
+        IOptions<StorageOptions>? storageOptions = null,
+        IFileContentEncryptor? encryptor = null)
+        : base(storageOptions?.Value, encryptor)
     {
         _option = option?.Value ?? throw new ArgumentNullException(nameof(option));
 
         if (string.IsNullOrWhiteSpace(_option.Path))
             _option.Path = Path.Combine(Directory.GetCurrentDirectory(), "Files");
 
-        _basePath = Path.IsPathRooted(_option.Path) ? _option.Path : Path.Combine(Directory.GetCurrentDirectory(), _option.Path);
+        _basePath = Path.GetFullPath(Path.IsPathRooted(_option.Path) ? _option.Path : Path.Combine(Directory.GetCurrentDirectory(), _option.Path));
 
         if (_option.EnsureBasePathExists && !Directory.Exists(_basePath))
             Directory.CreateDirectory(_basePath);
@@ -37,91 +39,58 @@ public class LocalFileStorageManager : FileStorageManagerBase
 
     protected override ImageProcessingOptions? GetImageProcessingOptions() => _option.ImageProcessing;
 
-    /// <summary>
-    /// Stores the primary/original file on disk and returns its populated <see cref="IFileEntry"/>.
-    /// </summary>
-    public override async Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
+    /// <summary>Writes the content under the base directory and returns the provider-relative path.</summary>
+    protected override async Task<string> WriteCoreAsync(StorageWriteRequest request, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(file);
-        if (string.IsNullOrWhiteSpace(category))
-            throw new StorageValidationException("Category is required.");
+        ArgumentNullException.ThrowIfNull(request);
+        var relativePath = $"{request.Folder}/{request.FileName}";
+        var fullPath = GetFullPathFromRelative(relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
 
-        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        var entityName = typeof(T).Name;
+        await using (var outFs = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+            await request.Content.CopyToAsync(outFs, cancellationToken).ConfigureAwait(false);
 
-        var typeFolder = ImageProcessingHelper.GetFileTypeFolder(extension);
-        var relativeFolderPath = Path.Combine(category, entityName, typeFolder);
-        var uploadFolder = Path.Combine(_basePath, relativeFolderPath);
-        Directory.CreateDirectory(uploadFolder);
+        return relativePath;
+    }
 
-        var fileEntry = new FileEntry
+    protected override Task<Stream?> OpenReadCoreAsync(StorageLocation location, CancellationToken cancellationToken)
+    {
+        var fullPath = GetFullPathFromRelative(location.Location);
+        try
         {
-            Id = Guid.NewGuid(),
-            FileName = Path.GetFileName(file.FileName),
-            OriginalFileName = file.FileName,
-            Size = file.Length,
-            ContentType = file.ContentType,
-            UploadedTime = DateTime.UtcNow,
-            FileExtension = extension,
-            Category = category,
-            Encrypted = false,
-            StorageProvider = StorageProvider,
-            LastAccessedTime = DateTimeOffset.UtcNow,
-            VariantType = "original",
-            Metadata = new Dictionary<string, string>(),
-        };
-
-        var originalName = string.Concat(
-            (Path.GetFileNameWithoutExtension(file.FileName) ?? string.Empty)
-            .Split(Path.GetInvalidFileNameChars()));
-        var fileName = $"{fileEntry.Id:N}-{originalName}{extension}";
-        var fullFilePath = Path.Combine(uploadFolder, fileName);
-
-        await using (var outFs = new FileStream(fullFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-            await file.CopyToAsync(outFs, cancellationToken).ConfigureAwait(false);
-
-        // Provider-relative path (URL-safe, no base dir prefix)
-        fileEntry.FileLocation = Path.Combine(relativeFolderPath, fileName).Replace('\\', '/');
-        // Full storage path including the configured base directory (URL-safe)
-        fileEntry.StoragePath = Path.Combine(_option.Path, relativeFolderPath, fileName).Replace('\\', '/');
-
-        return fileEntry;
+            Stream stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+            return Task.FromResult<Stream?>(stream);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return Task.FromResult<Stream?>(null);
+        }
     }
 
+    protected override Task<bool> ExistsCoreAsync(StorageLocation location, CancellationToken cancellationToken)
+        => Task.FromResult(File.Exists(GetFullPathFromRelative(location.Location)));
 
-    /// <summary>
-    /// Writes the processed JPEG to disk under <c>relativeFolder/variantFolder/</c> and returns
-    /// the provider-relative path (no base directory prefix).
-    /// </summary>
-    protected override async Task<string> StoreVariantAsync(
-        MemoryStream data,
-        string relativeFolder,
-        string variantFolder,
-        string fileName,
-        string variantType,
-        CancellationToken ct)
+    protected override Task DeleteCoreAsync(StorageLocation location, CancellationToken cancellationToken)
     {
-        var uploadFolder = Path.Combine(_basePath, relativeFolder, variantFolder);
-        Directory.CreateDirectory(uploadFolder);
-
-        var fullPath = Path.Combine(uploadFolder, fileName);
-        await using (var fileOut = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-            await data.CopyToAsync(fileOut, ct).ConfigureAwait(false);
-
-        return Path.Combine(relativeFolder, variantFolder, fileName).Replace('\\', '/');
+        // File.Delete does not throw when the file is missing (only when its directory is).
+        var fullPath = GetFullPathFromRelative(location.Location);
+        if (File.Exists(fullPath))
+            File.Delete(fullPath);
+        return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Extends the base variant entry with <see cref="IFileEntry.StoragePath"/>.
-    /// </summary>
-    protected override FileEntry BuildVariantEntry(
-        string location, long size, string variantType, string? category, IFileEntry primary)
+    protected override Task<Uri?> GetUrlCoreAsync(StorageLocation location, TimeSpan? lifetime, CancellationToken cancellationToken)
     {
-        var entry = base.BuildVariantEntry(location, size, variantType, category, primary);
-        entry.StoragePath = Path.Combine(_option.Path, location).Replace('\\', '/');
-        return entry;
+        if (string.IsNullOrWhiteSpace(_option.PublicBaseUrl))
+            return Task.FromResult<Uri?>(null);
+
+        var escaped = string.Join('/', location.Location.Split('/').Select(Uri.EscapeDataString));
+        return Task.FromResult<Uri?>(new Uri($"{_option.PublicBaseUrl.TrimEnd('/')}/{escaped}"));
     }
 
+    /// <summary>Full storage path including the configured base directory (URL-safe).</summary>
+    protected override string? GetStoragePath(string location)
+        => Path.Combine(_option.Path, location).Replace('\\', '/');
 
     /// <summary>
     /// Resolves a provider-relative or absolute path to its full disk path,
@@ -137,20 +106,13 @@ public class LocalFileStorageManager : FileStorageManagerBase
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
 
-        var baseFull = Path.GetFullPath(_basePath);
+        var baseWithSeparator = _basePath.EndsWith(Path.DirectorySeparatorChar) ? _basePath : _basePath + Path.DirectorySeparatorChar;
+        var full = Path.IsPathRooted(relativePath)
+            ? Path.GetFullPath(relativePath)
+            : Path.GetFullPath(Path.Combine(_basePath, relativePath.TrimStart('/', '\\')));
 
-        if (Path.IsPathRooted(relativePath))
-        {
-            var absolute = Path.GetFullPath(relativePath);
-            if (!absolute.StartsWith(baseFull, comparison) && !string.Equals(absolute, baseFull, comparison))
-                throw new StorageValidationException("File path escapes base storage path.");
-            return absolute;
-        }
-
-        var combined = Path.Combine(_basePath, relativePath.TrimStart('/', '\\'));
-        var full = Path.GetFullPath(combined);
-
-        if (!full.StartsWith(baseFull, comparison) && !string.Equals(full, baseFull, comparison))
+        // A plain StartsWith(base) would accept "/data/Files-other/..." for base "/data/Files".
+        if (!full.StartsWith(baseWithSeparator, comparison))
             throw new StorageValidationException("File path escapes base storage path.");
 
         return full;

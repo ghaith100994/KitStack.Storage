@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Authors>ghaith100994</Authors>
+    <Company>KitStack</Company>
+    <Description>Azure Blob Storage provider for KitStack.Storage (upload, read, delete, SAS URLs, access tiers, image variants, health checks).</Description>
+    <PackageId>KitStack.Storage.Azure</PackageId>
+    <PackageTags>kitstack storage azure blob healthchecks</PackageTags>
+    <RepositoryUrl>https://github.com/ghaith100994/KitStack.Storage</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <IncludeReferencedProjects>true</IncludeReferencedProjects>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storage</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Storage.Blobs" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KitStack.Abstractions\KitStack.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

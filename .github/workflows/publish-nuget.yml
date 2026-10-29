@@ -63,47 +63,31 @@ jobs:
           RAW="${TAG#v}"
           echo "version=${RAW}" >> $GITHUB_OUTPUT
 
-      - name: Pack dependencies (nupkg + snupkg)
+      - name: Test
+        run: dotnet test -c Release --no-build
+
+      - name: Pack (nupkg + snupkg)
         run: |
           set -euo pipefail
           VERSION=${{ steps.vars.outputs.version }}
           mkdir -p $PACK_OUTPUT
 
-          echo "Packing KitStack.Abstractions v$VERSION"
-          dotnet pack src/KitStack.Abstractions/KitStack.Abstractions.csproj \
-            -c Release -o $PACK_OUTPUT --no-build \
-            /p:Version=$VERSION /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg
-
-          echo "Packing KitStack.Storage.Local v$VERSION"
-          dotnet pack src/KitStack.Storage.Local/KitStack.Storage.Local.csproj \
-            -c Release -o $PACK_OUTPUT --no-build \
-            /p:Version=$VERSION /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg
-
-          echo "Packing KitStack.Storage.S3 v$VERSION"
-          dotnet pack src/KitStack.Storage.S3/KitStack.Storage.S3.csproj \
-            -c Release -o $PACK_OUTPUT --no-build \
-            /p:Version=$VERSION /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg
-
-          echo "Packing KitStack.Storage.Sftp v$VERSION"
-          dotnet pack src/KitStack.Storage.Sftp/KitStack.Storage.Sftp.csproj \
-            -c Release -o $PACK_OUTPUT --no-build \
-            /p:Version=$VERSION /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg
-
-          echo "Packing KitStack.Fakes v$VERSION"
-          dotnet pack src/KitStack.Fakes/KitStack.Fakes.csproj \
-            -c Release -o $PACK_OUTPUT --no-build \
-            /p:Version=$VERSION /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg
-
-      - name: Pack KitStack.AspNetCore (nupkg + snupkg)
-        run: |
-          set -euo pipefail
-          VERSION=${{ steps.vars.outputs.version }}
-          mkdir -p $PACK_OUTPUT
-
-          echo "Packing KitStack.AspNetCore v$VERSION"
-          dotnet pack src/KitStack.AspNetCore/KitStack.AspNetCore.csproj \
-            -c Release -o $PACK_OUTPUT --no-build \
-            /p:Version=$VERSION /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg
+          for project in \
+            KitStack.Abstractions \
+            KitStack.Fakes \
+            KitStack.Storage.Local \
+            KitStack.Storage.S3 \
+            KitStack.Storage.Azure \
+            KitStack.Storage.Ftp \
+            KitStack.Storage.Sftp \
+            KitStack.Storage.EntityFrameworkCore \
+            KitStack.AspNetCore
+          do
+            echo "Packing $project v$VERSION"
+            dotnet pack "src/$project/$project.csproj" \
+              -c Release -o $PACK_OUTPUT --no-build \
+              /p:Version=$VERSION /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg
+          done
 
       - name: List produced packages
         run: ls -la $PACK_OUTPUT || true

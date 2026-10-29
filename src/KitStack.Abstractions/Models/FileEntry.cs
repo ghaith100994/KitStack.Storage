@@ -1,4 +1,5 @@
-﻿using KitStack.Abstractions.Interfaces;
+using KitStack.Abstractions.Interfaces;
+using KitStack.Abstractions.Utilities;
 
 namespace KitStack.Abstractions.Models;
 
@@ -20,7 +21,9 @@ public class FileEntry : IFileEntry
 
     public long Size { get; set; }
 
-    public string? ContentType { get; set; }
+    public string ContentType { get; set; } = ContentTypes.OctetStream;
+
+    public string? Checksum { get; set; }
 
     public string? FileExtension { get; set; }
 

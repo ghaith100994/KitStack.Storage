@@ -11,7 +11,7 @@
         <AnalysisLevel>latest</AnalysisLevel>
         <AnalysisMode>All</AnalysisMode>
         <LangVersion>latest</LangVersion>
-        <Version>0.1.5</Version>
+        <Version>0.2.0</Version>
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     </PropertyGroup>
   <!-- ImageSharp 4+ validates a Six Labors license at build time. The key is never committed:

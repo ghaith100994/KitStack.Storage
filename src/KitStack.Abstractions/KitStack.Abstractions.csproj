@@ -1,18 +1,17 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- Package metadata -->
     <PackageId>KitStack.Abstractions</PackageId>
-    <!-- update for each release, or set from CI -->
     <Authors>ghaith100994</Authors>
     <Company>KitStack</Company>
 
-    <Description>Lightweight storage interfaces, models and utilities for KitStack.Storage.</Description>
+    <Description>Storage interfaces, models and the shared provider pipeline for KitStack.Storage: read/write/delete/URL APIs, checksums, content-type resolution, upload policy, encryption at rest and file references.</Description>
     <PackageTags>kitstack storage abstractions models utilities</PackageTags>
     <RepositoryUrl>https://github.com/ghaith100994/KitStack.Storage</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storageo</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storage</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
@@ -20,9 +19,16 @@
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 
-  
   <ItemGroup>
-		<PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" />
-		<PackageReference Include="SixLabors.ImageSharp" />
-	</ItemGroup>
+    <InternalsVisibleTo Include="KitStack.Storage.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="SixLabors.ImageSharp" />
+  </ItemGroup>
 </Project>

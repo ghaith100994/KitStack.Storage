@@ -1,190 +1,160 @@
-using System.Net.Sockets;
+using System.Collections.Concurrent;
+using System.Net;
 using Amazon;
+using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
-using Amazon.S3.Util;
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
 using KitStack.Abstractions.Options;
+using KitStack.Abstractions.Security;
 using KitStack.Abstractions.Services;
-using KitStack.Abstractions.Utilities;
 using KitStack.Storage.S3.Helpers;
 using KitStack.Storage.S3.Options;
-using Microsoft.AspNetCore.Http;
-using Amazon.Runtime;
+using Microsoft.Extensions.Options;
 
 namespace KitStack.Storage.S3.Services;
 
+/// <summary>
+/// Amazon S3 (and S3-compatible) implementation of <c>IFileStorageManager</c>.
+/// Image variants can be routed to their own bucket via <see cref="S3ImageProcessingOptions"/>.
+/// </summary>
 public sealed class S3FileStorageManager : FileStorageManagerBase, IDisposable
 {
-    private readonly AmazonS3Client _client;
     private readonly S3Options _options;
     private readonly S3TargetOptions _mainTarget;
+    private readonly ConcurrentDictionary<string, AmazonS3Client> _clients = new(StringComparer.Ordinal);
     private bool _disposed;
 
     protected override string StorageProvider => "S3";
 
-    public S3FileStorageManager(S3Options options)
+    public S3FileStorageManager(
+        IOptions<S3Options> options,
+        IOptions<StorageOptions>? storageOptions = null,
+        IFileContentEncryptor? encryptor = null)
+        : base(storageOptions?.Value, encryptor)
     {
-        _options = options;
-        _mainTarget = options.MainTarget;
-
-        // Create main client using credentials from target or options or default credential chain
-        _client = CreateClientForTarget(_mainTarget);
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        _mainTarget = _options.MainTarget;
     }
 
     protected override ImageProcessingOptions? GetImageProcessingOptions() => _options.ImageProcessing;
 
-    public override async Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default) where T : class
+    protected override async Task<string> WriteCoreAsync(StorageWriteRequest request, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(file);
-        if (string.IsNullOrWhiteSpace(category))
-            throw new StorageValidationException("Category required");
-
-        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        var entityName = typeof(T).Name;
-        var typeFolder = ImageProcessingHelper.GetFileTypeFolder(extension);
-        var relative = Path.Combine(category, entityName, typeFolder).Replace('\\', '/');
-        var key = S3KeyHelper.NormalizeKey(_mainTarget.Prefix ?? string.Empty, relative, $"{Guid.NewGuid():N}-{Path.GetFileNameWithoutExtension(file.FileName)}{extension}");
-
-        var entry = new FileEntry
-        {
-            Id = Guid.NewGuid(),
-            FileName = Path.GetFileName(file.FileName),
-            OriginalFileName = file.FileName,
-            Size = file.Length,
-            ContentType = file.ContentType,
-            UploadedTime = DateTime.UtcNow,
-            FileExtension = extension,
-            Category = category,
-            Encrypted = false,
-            VariantType = "original",
-            StorageProvider = StorageProvider,
-            LastAccessedTime = DateTimeOffset.UtcNow,
-            Metadata = new Dictionary<string, string>(),
-        };
-
-        using var ms = new MemoryStream();
-        await file.OpenReadStream().CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
-        ms.Seek(0, SeekOrigin.Begin);
-
-        var (client, bucket, dispose) = GetClientAndBucket(_mainTarget);
-        try
-        {
-            await UploadStreamAsync(client, bucket, key, ms, file.ContentType ?? "application/octet-stream", _mainTarget, cancellationToken).ConfigureAwait(false);
-            entry.FileLocation = key;
-        }
-        finally
-        {
-            if (dispose) client.Dispose();
-        }
-        return entry;
+        ArgumentNullException.ThrowIfNull(request);
+        var target = ResolveTarget(request.VariantType);
+        var key = S3KeyHelper.NormalizeKey(target.Prefix ?? string.Empty, request.Folder, request.FileName);
+        var (client, bucket) = GetClientAndBucket(target);
+        await UploadStreamAsync(client, bucket, key, request.Content, request.ContentType, target, cancellationToken).ConfigureAwait(false);
+        return key;
     }
 
-    /// <summary>
-    /// Uploads a processed JPEG variant to the appropriate S3 target and returns its key.
-    /// Per-variant target routing uses <see cref="S3ImageProcessingOptions"/> when configured.
-    /// </summary>
-    protected override async Task<string> StoreVariantAsync(
-        MemoryStream data,
-        string relativeFolder,
-        string variantFolder,
-        string fileName,
-        string variantType,
-        CancellationToken ct)
+    protected override async Task<Stream?> OpenReadCoreAsync(StorageLocation location, CancellationToken cancellationToken)
     {
-        var ip = _options.ImageProcessing;
-        S3TargetOptions target = variantType switch
-        {
-            "compressed" => ip?.CompressedTarget ?? _mainTarget,
-            "thumbnail"  => ip?.ThumbnailTarget  ?? _mainTarget,
-            _            => ip?.AdditionalSizes.FirstOrDefault(s => s.SizeName == variantType) is S3ImageSizeOption s3s
-                               ? s3s.Target ?? _mainTarget
-                               : _mainTarget,
-        };
-
-        var keyRel = $"{relativeFolder}/{variantFolder}".Replace('\\', '/').Trim('/');
-        var key = S3KeyHelper.NormalizeKey(target.Prefix ?? string.Empty, keyRel, fileName);
-
-        var (client, bucket, dispose) = GetClientAndBucket(target);
+        var (client, bucket) = GetClientAndBucket(ResolveTarget(location.VariantType));
         try
         {
-            await UploadStreamAsync(client, bucket, key, data, "image/jpeg", target, ct).ConfigureAwait(false);
+            var response = await client.GetObjectAsync(bucket, location.Location, cancellationToken).ConfigureAwait(false);
+            return new ResponseOwningStream(response);
         }
-        finally
+        catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
-            if (dispose) client.Dispose();
+            return null;
         }
-        return key;
+    }
+
+    protected override async Task<bool> ExistsCoreAsync(StorageLocation location, CancellationToken cancellationToken)
+    {
+        var (client, bucket) = GetClientAndBucket(ResolveTarget(location.VariantType));
+        try
+        {
+            await client.GetObjectMetadataAsync(bucket, location.Location, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+    }
+
+    protected override async Task DeleteCoreAsync(StorageLocation location, CancellationToken cancellationToken)
+    {
+        // DeleteObject succeeds for missing keys.
+        var (client, bucket) = GetClientAndBucket(ResolveTarget(location.VariantType));
+        await client.DeleteObjectAsync(bucket, location.Location, cancellationToken).ConfigureAwait(false);
+    }
+
+    protected override async Task<Uri?> GetUrlCoreAsync(StorageLocation location, TimeSpan? lifetime, CancellationToken cancellationToken)
+    {
+        var (client, bucket) = GetClientAndBucket(ResolveTarget(location.VariantType));
+        var url = await client.GetPreSignedURLAsync(new GetPreSignedUrlRequest
+        {
+            BucketName = bucket,
+            Key = location.Location,
+            Verb = HttpVerb.GET,
+            Expires = DateTime.UtcNow.Add(lifetime ?? TimeSpan.FromSeconds(_options.PresignedUrlExpirationSeconds)),
+        }).ConfigureAwait(false);
+        return new Uri(url);
     }
 
     public void Dispose()
     {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    private void Dispose(bool disposing)
-    {
-        if (!_disposed)
-        {
-            if (disposing)
-            {
-                _client?.Dispose();
-            }
-            _disposed = true;
-        }
+        if (_disposed)
+            return;
+        foreach (var client in _clients.Values)
+            client.Dispose();
+        _clients.Clear();
+        _disposed = true;
     }
 
     #region Helpers
+    private S3TargetOptions ResolveTarget(string variantType)
+    {
+        var ip = _options.ImageProcessing;
+        return variantType switch
+        {
+            OriginalVariant => _mainTarget,
+            "compressed" => ip?.CompressedTarget ?? _mainTarget,
+            "thumbnail" => ip?.ThumbnailTarget ?? _mainTarget,
+            _ => ip?.AdditionalSizes.FirstOrDefault(s => s.SizeName == variantType) is S3ImageSizeOption { Target: { } sizeTarget }
+                ? sizeTarget
+                : _mainTarget,
+        };
+    }
+
     private static async Task UploadStreamAsync(AmazonS3Client client, string bucketName, string key, Stream data, string contentType, S3TargetOptions target, CancellationToken cancellationToken)
     {
-        // Ensure stream at beginning
         if (data.CanSeek) data.Seek(0, SeekOrigin.Begin);
 
-        // Apply target/global settings
-        var useSse = target?.UseServerSideEncryption == true;
-        var kmsKey = target?.KmsKeyId;
-        var storageClassStr = target?.StorageClass;
-        var cannedAcl = target?.CannedAcl;
-        
         var put = new PutObjectRequest
         {
             BucketName = bucketName,
             Key = key,
             InputStream = data,
-            ContentType = contentType
+            AutoCloseStream = false,
+            ContentType = contentType,
         };
 
-        if (useSse && !string.IsNullOrWhiteSpace(kmsKey))
+        if (target.UseServerSideEncryption == true)
         {
-            put.ServerSideEncryptionMethod = ServerSideEncryptionMethod.AWSKMS;
-            put.ServerSideEncryptionKeyManagementServiceKeyId = kmsKey;
+            if (string.IsNullOrWhiteSpace(target.KmsKeyId))
+            {
+                put.ServerSideEncryptionMethod = ServerSideEncryptionMethod.AES256;
+            }
+            else
+            {
+                put.ServerSideEncryptionMethod = ServerSideEncryptionMethod.AWSKMS;
+                put.ServerSideEncryptionKeyManagementServiceKeyId = target.KmsKeyId;
+            }
         }
 
-        if (!string.IsNullOrWhiteSpace(storageClassStr))
-        {
-            put.StorageClass = S3StorageClass.FindValue(storageClassStr);
-        }
+        if (!string.IsNullOrWhiteSpace(target.StorageClass))
+            put.StorageClass = S3StorageClass.FindValue(target.StorageClass);
 
-        if (!string.IsNullOrWhiteSpace(cannedAcl))
-        {
-            put.CannedACL = S3CannedACL.FindValue(cannedAcl);
-        }
+        if (!string.IsNullOrWhiteSpace(target.CannedAcl))
+            put.CannedACL = S3CannedACL.FindValue(target.CannedAcl);
 
         await client.PutObjectAsync(put, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static bool TargetsMatch(S3TargetOptions a, S3TargetOptions b)
-    {
-        if (a == null || b == null) return false;
-        return string.Equals(a.BucketName, b.BucketName, StringComparison.OrdinalIgnoreCase)
-               && string.Equals(a.Region, b.Region, StringComparison.OrdinalIgnoreCase)
-               && string.Equals(a.ServiceUrl, b.ServiceUrl, StringComparison.OrdinalIgnoreCase)
-               && string.Equals(a.Prefix, b.Prefix, StringComparison.OrdinalIgnoreCase)
-               && string.Equals(a.AccessKeyID, b.AccessKeyID, StringComparison.Ordinal)
-               && string.Equals(a.SecretAccessKey, b.SecretAccessKey, StringComparison.Ordinal);
     }
 
     private static AmazonS3Config BuildConfigFromTarget(S3TargetOptions target)
@@ -205,8 +175,8 @@ public sealed class S3FileStorageManager : FileStorageManagerBase, IDisposable
         var cfg = BuildConfigFromTarget(target);
 
         // Prefer explicit per-target credentials, otherwise fall back to global options
-        var access = target?.AccessKeyID;
-        var secret = target?.SecretAccessKey;
+        var access = target.AccessKeyID;
+        var secret = target.SecretAccessKey;
         if (string.IsNullOrWhiteSpace(access) || string.IsNullOrWhiteSpace(secret))
         {
             access = _options.AccessKeyID;
@@ -214,34 +184,63 @@ public sealed class S3FileStorageManager : FileStorageManagerBase, IDisposable
         }
 
         if (!string.IsNullOrWhiteSpace(access) && !string.IsNullOrWhiteSpace(secret))
-        {
-            var creds = new BasicAWSCredentials(access, secret);
-            return new AmazonS3Client(creds, cfg);
-        }
+            return new AmazonS3Client(new BasicAWSCredentials(access, secret), cfg);
 
         // Use SDK default credential chain
         return new AmazonS3Client(cfg);
     }
 
-    private (AmazonS3Client client, string bucketName, bool dispose) GetClientAndBucket(S3TargetOptions? target)
+    private (AmazonS3Client client, string bucketName) GetClientAndBucket(S3TargetOptions? target)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var t = target ?? _mainTarget;
-        var bucket = t.BucketName ?? _mainTarget.BucketName;
-        if (TargetsMatch(t, _mainTarget))
-        {
-            return (_client, bucket!, false);
-        }
-
-        var client = CreateClientForTarget(t);
-        return (client, bucket!, true);
+        var bucket = t.BucketName ?? _mainTarget.BucketName!;
+        var cacheKey = string.Join('|', t.Region, t.ServiceUrl, t.AccessKeyID, t.SecretAccessKey);
+        return (_clients.GetOrAdd(cacheKey, _ => CreateClientForTarget(t)), bucket);
     }
 
-    // Public resolver for external helpers to obtain a client and bucket for a given target.
-    // Returns IAmazonS3 to avoid exposing concrete SDK client type.
+    /// <summary>
+    /// Resolve the client and bucket used for a target, for external helpers (bucket creation, custom operations).
+    /// The client is owned by this manager: do not dispose it (<c>dispose</c> is always <c>false</c>).
+    /// </summary>
     public (IAmazonS3 client, string bucketName, bool dispose) ResolveClientAndBucket(S3TargetOptions? target)
     {
-        var (client, bucket, dispose) = GetClientAndBucket(target);
-        return (client, bucket, dispose);
+        var (client, bucket) = GetClientAndBucket(target);
+        return (client, bucket, false);
+    }
+
+    /// <summary>Ensure the configured buckets exist (targets with <c>EnsureBucketExists = true</c>).</summary>
+    public Task EnsureBucketsExistAsync(CancellationToken cancellationToken = default)
+        => S3BucketHelper.EnsureBucketsExistAsync(_options, ResolveClientAndBucket, cancellationToken);
+
+    /// <summary>Stream over a GetObject response that disposes the response with it.</summary>
+    private sealed class ResponseOwningStream(GetObjectResponse response) : Stream
+    {
+        private readonly Stream _inner = response.ResponseStream;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => response.ContentLength;
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
+        public override int Read(Span<byte> buffer) => _inner.Read(buffer);
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => _inner.ReadAsync(buffer, offset, count, cancellationToken);
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => _inner.ReadAsync(buffer, cancellationToken);
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _inner.Dispose();
+                response.Dispose();
+            }
+            base.Dispose(disposing);
+        }
     }
     #endregion
 }

@@ -2,13 +2,15 @@
   <PropertyGroup>
     <Authors>ghaith100994</Authors>
     <Company>KitStack</Company>
-    <Description>SFTP/FTP storage provider for KitStack.Storage (file storage, health checks).</Description>
+    <Description>SFTP (SSH File Transfer Protocol) storage provider for KitStack.Storage, built on SSH.NET (password or private-key auth, host-key pinning, image variants, health checks).</Description>
     <PackageId>KitStack.Storage.Sftp</PackageId>
-    <PackageTags>kitstack storage sftp ftp healthchecks</PackageTags>
+    <PackageTags>kitstack storage sftp ssh healthchecks</PackageTags>
     <RepositoryUrl>https://github.com/ghaith100994/KitStack.Storage</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <IncludeReferencedProjects>true</IncludeReferencedProjects>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storage</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,11 +18,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FluentFTP" />
+    <PackageReference Include="SSH.NET" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
     <PackageReference Include="Microsoft.Extensions.Options" />
-    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>

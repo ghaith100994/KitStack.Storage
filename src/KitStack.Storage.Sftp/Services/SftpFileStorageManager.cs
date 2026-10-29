@@ -1,180 +1,160 @@
+using System.Collections.Concurrent;
 using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
+using KitStack.Abstractions.IO;
 using KitStack.Abstractions.Options;
+using KitStack.Abstractions.Security;
 using KitStack.Abstractions.Services;
 using KitStack.Abstractions.Utilities;
 using KitStack.Storage.Sftp.Options;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
-using FluentFTP;
+using Renci.SshNet;
+using Renci.SshNet.Common;
 
 namespace KitStack.Storage.Sftp.Services;
 
-public class SftpFileStorageManager : FileStorageManagerBase, IDisposable
+/// <summary>
+/// SFTP implementation of <c>IFileStorageManager</c> built on SSH.NET.
+/// One connection is shared and operations are serialized on it.
+/// </summary>
+public sealed class SftpFileStorageManager : FileStorageManagerBase, IDisposable
 {
     private readonly SftpOptions _options;
-    private readonly FtpClient _client;
+    private readonly SftpClient _client;
+    private readonly string _root;
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly ConcurrentDictionary<string, bool> _knownDirectories = new(StringComparer.Ordinal);
     private bool _disposed;
 
     protected override string StorageProvider => "Sftp";
 
-    public SftpFileStorageManager(IOptions<SftpOptions> options)
+    public SftpFileStorageManager(
+        IOptions<SftpOptions> options,
+        IOptions<StorageOptions>? storageOptions = null,
+        IFileContentEncryptor? encryptor = null)
+        : base(storageOptions?.Value, encryptor)
     {
+        ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
-
-        // Default remote path similar to local provider
-        if (string.IsNullOrWhiteSpace(_options.RemotePath))
-            _options.RemotePath = "Files";
-
-        // Build FluentFTP client (use basic constructor and set port)
-        var client = new FtpClient(_options.Host, _options.Username ?? string.Empty, _options.Password ?? string.Empty);
-        client.Port = _options.Port;
-
-        // Try to connect now and optionally ensure base path exists
-        try
-        {
-            client.Connect();
-            if (_options.EnsureRemotePathExists && !string.IsNullOrWhiteSpace(_options.RemotePath))
-            {
-                var baseDir = _options.RemotePath.Trim('/');
-                if (!string.IsNullOrWhiteSpace(baseDir))
-                    client.CreateDirectory(baseDir);
-            }
-        }
-        catch
-        {
-            // Swallow connect errors here; operations will attempt to connect later.
-        }
-
-        _client = client;
+        var remote = string.IsNullOrWhiteSpace(_options.RemotePath) ? "Files" : _options.RemotePath.Trim();
+        _root = remote.Length > 1 ? remote.TrimEnd('/') : remote;
+        _client = SftpClientFactory.Create(_options);
     }
 
     protected override ImageProcessingOptions? GetImageProcessingOptions() => _options.ImageProcessing;
 
-    public override async Task<IFileEntry> CreateAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken = default)
+    protected override Task<string> WriteCoreAsync(StorageWriteRequest request, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(file);
-        if (string.IsNullOrWhiteSpace(category))
-            throw new StorageValidationException("Category is required.");
-
-        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        var entityName = typeof(T).Name;
-
-        var typeFolder = ImageProcessingHelper.GetFileTypeFolder(extension);
-        var remoteFolder = CombineRemotePath(_options.RemotePath, category, entityName, typeFolder);
-
-        var id = Guid.NewGuid();
-        var originalName = Path.GetFileNameWithoutExtension(file.FileName) ?? string.Empty;
-        originalName = string.Concat(originalName.Split(Path.GetInvalidFileNameChars()));
-        var fileName = $"{id:N}-{originalName}{extension}";
-        var remoteFilePath = CombineRemotePath(remoteFolder, fileName);
-
-        EnsureConnected();
-
-        var remotePath = remoteFilePath.TrimStart('/');
-        var remoteDir = Path.GetDirectoryName(remotePath)?.Replace('\\', '/') ?? string.Empty;
-        if (_options.EnsureRemotePathExists && !string.IsNullOrWhiteSpace(remoteDir))
+        ArgumentNullException.ThrowIfNull(request);
+        var directory = Join(_root, request.Folder);
+        var remotePath = $"{directory}/{request.FileName}";
+        return WithClientAsync(async client =>
         {
-            _client.CreateDirectory(remoteDir);
-        }
+            if (_options.EnsureRemotePathExists)
+                await EnsureDirectoryAsync(client, directory, cancellationToken).ConfigureAwait(false);
+            await client.UploadFileAsync(request.Content, remotePath, canOverride: true, uploadProgress: null, cancellationToken).ConfigureAwait(false);
+            return remotePath;
+        }, cancellationToken);
+    }
 
-        // FluentFTP upload: write to a temp file then upload (avoids API surface differences across versions)
-        var tempFile = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        try
+    protected override Task<Stream?> OpenReadCoreAsync(StorageLocation location, CancellationToken cancellationToken)
+        => WithClientAsync<Stream?>(async client =>
         {
-            await using (var outFs = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+            // Download fully: the shared connection cannot stay busy while the caller reads.
+            var buffer = SpooledContent.CreateTempFile();
+            try
             {
-                await file.OpenReadStream().CopyToAsync(outFs, cancellationToken).ConfigureAwait(false);
+                await client.DownloadFileAsync(location.Location, buffer, cancellationToken).ConfigureAwait(false);
+                buffer.Seek(0, SeekOrigin.Begin);
+                return buffer;
+            }
+            catch (SftpPathNotFoundException)
+            {
+                await buffer.DisposeAsync().ConfigureAwait(false);
+                return null;
+            }
+            catch
+            {
+                await buffer.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+        }, cancellationToken);
+
+    protected override Task<bool> ExistsCoreAsync(StorageLocation location, CancellationToken cancellationToken)
+        => WithClientAsync(client => client.ExistsAsync(location.Location, cancellationToken), cancellationToken);
+
+    protected override Task DeleteCoreAsync(StorageLocation location, CancellationToken cancellationToken)
+        => WithClientAsync(async client =>
+        {
+            try
+            {
+                await client.DeleteFileAsync(location.Location, cancellationToken).ConfigureAwait(false);
+            }
+            catch (SftpPathNotFoundException)
+            {
+                // Already gone.
             }
 
-            _client.UploadFile(tempFile, remotePath, FtpRemoteExists.Overwrite, createRemoteDir: false);
-        }
-        finally
-        {
-            try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { }
-        }
+            return true;
+        }, cancellationToken);
 
-        var entry = new FileEntry
-        {
-            Id = id,
-            FileName = Path.GetFileName(file.FileName),
-            OriginalFileName = file.FileName,
-            FileLocation = remoteFilePath.TrimStart('/'),
-            Size = file.Length,
-            ContentType = file.ContentType,
-            UploadedTime = DateTimeOffset.UtcNow,
-            Category = category,
-            Encrypted = false,
-            FileExtension = extension,
-            VariantType = "original",
-            StorageProvider = StorageProvider,
-            LastAccessedTime = DateTimeOffset.UtcNow,
-            Metadata = new Dictionary<string, string>(),
-        };
-
-        return entry;
-    }
-
-    /// <summary>
-    /// Writes the processed JPEG to a temp file, uploads it via FTP, then returns the remote path.
-    /// </summary>
-    protected override async Task<string> StoreVariantAsync(
-        MemoryStream data,
-        string relativeFolder,
-        string variantFolder,
-        string fileName,
-        string variantType,
-        CancellationToken ct)
+    private async Task EnsureDirectoryAsync(SftpClient client, string directory, CancellationToken cancellationToken)
     {
-        var tempFile = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        try
-        {
-            await using (var fileOut = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-                await data.CopyToAsync(fileOut, ct).ConfigureAwait(false);
-
-            var remotePath = $"{relativeFolder}/{variantFolder}/{fileName}".Replace('\\', '/').TrimStart('/');
-            EnsureConnected();
-            _client.UploadFile(tempFile, remotePath, FtpRemoteExists.Overwrite, createRemoteDir: true);
-            return remotePath;
-        }
-        finally
-        {
-            try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { }
-        }
-    }
-
-    private static string CombineRemotePath(params string?[] parts)
-    {
-        var clean = parts.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p!.Trim('/'));
-        var joined = string.Join('/', clean);
-        return "/" + joined;
-    }
-
-    private void EnsureConnected()
-    {
-        if (_client.IsConnected)
+        if (_knownDirectories.ContainsKey(directory))
             return;
 
-        _client.Connect();
+        // SFTP has no "mkdir -p": create each missing level.
+        var current = directory.StartsWith('/') ? string.Empty : null;
+        foreach (var segment in directory.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = current is null ? segment : $"{current}/{segment}";
+            if (_knownDirectories.ContainsKey(current))
+                continue;
+            if (!await client.ExistsAsync(current, cancellationToken).ConfigureAwait(false))
+                await client.CreateDirectoryAsync(current, cancellationToken).ConfigureAwait(false);
+            _knownDirectories.TryAdd(current, true);
+        }
     }
 
+    private async Task<T> WithClientAsync<T>(Func<SftpClient, Task<T>> operation, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!_client.IsConnected)
+            {
+                try
+                {
+                    await _client.ConnectAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (SshConnectionException ex) when (ex.DisconnectReason == Renci.SshNet.Messages.Transport.DisconnectReason.HostKeyNotVerifiable)
+                {
+                    throw new StorageConfigurationException(
+                        $"SFTP host key of '{_options.Host}' does not match Storage:Sftp:HostKeyFingerprint.", ex);
+                }
+            }
+
+            return await operation(_client).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    // StoragePaths.Combine trims slashes, so restore the leading '/' of an absolute root.
+    private static string Join(string root, string relative)
+    {
+        var joined = StoragePaths.Combine(root, relative);
+        return root.StartsWith('/') ? "/" + joined : joined;
+    }
 
     public void Dispose()
     {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    private void Dispose(bool disposing)
-    {
-        if (!_disposed)
-        {
-            if (disposing)
-            {
-                try { _client.Dispose(); } catch { }
-            }
-            _disposed = true;
-        }
+        if (_disposed)
+            return;
+        _disposed = true;
+        _client.Dispose();
+        _gate.Dispose();
     }
 }

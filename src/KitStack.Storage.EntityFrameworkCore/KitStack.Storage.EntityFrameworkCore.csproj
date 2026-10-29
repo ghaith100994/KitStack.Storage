@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Authors>ghaith100994</Authors>
+    <Company>KitStack</Company>
+    <Description>EF Core metadata store for KitStack.Storage: IFileEntryStore, StoredFileRef owned-type mapping, an attach/unlink SaveChanges interceptor and an orphan-sweeper job.</Description>
+    <PackageId>KitStack.Storage.EntityFrameworkCore</PackageId>
+    <PackageTags>kitstack storage efcore entityframeworkcore metadata</PackageTags>
+    <RepositoryUrl>https://github.com/ghaith100994/KitStack.Storage</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <IncludeReferencedProjects>true</IncludeReferencedProjects>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storage</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KitStack.Abstractions\KitStack.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

@@ -11,7 +11,7 @@
     <RepositoryType>git</RepositoryType>
     <IncludeReferencedProjects>true</IncludeReferencedProjects>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storageo</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storage</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
