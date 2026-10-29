@@ -18,7 +18,10 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="coverlet.collector" />
-    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="EphemeralMongo" />
@@ -27,8 +30,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <RuntimeHostConfigurationOption Include="KitStack.Tests.MongoBinaryDirectory"
-                                    Value="$(PkgEphemeralMongo8_runtime_linux-x64)/runtimes/linux-x64/native/mongodb/bin" />
+    <RuntimeHostConfigurationOption Include="KitStack.Tests.MongoBinaryDirectory" Value="$(PkgEphemeralMongo8_runtime_linux-x64)/runtimes/linux-x64/native/mongodb/bin" />
   </ItemGroup>
 
   <ItemGroup>
