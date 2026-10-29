@@ -1,4 +1,4 @@
-namespace KitStack.Storage.EntityFrameworkCore.Hosting;
+namespace KitStack.Abstractions.Hosting;
 
 /// <summary>Options for the background orphan sweeper (bound from Storage:OrphanSweeper).</summary>
 public sealed class OrphanSweeperOptions

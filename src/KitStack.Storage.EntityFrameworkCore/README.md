@@ -9,7 +9,7 @@ It contains:
   repeating FileEntryId / location / content type / size / checksum on every entity).
 - `FileReferenceInterceptor`, which links a file to its owner when a `StoredFileRef` is set and releases the
   link when it is replaced, cleared or its owner is deleted.
-- `FileOrphanSweeper` + an opt-in hosted service, which delete files that stayed unlinked past a grace period.
+- Works with `FileOrphanSweeper` and the opt-in `AddOrphanSweeper()` hosted service, which delete files that stayed unlinked past a grace period.
 
 ## Metadata in its own database
 

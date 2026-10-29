@@ -97,6 +97,16 @@ public interface IFileStorageManager
     Task DeleteAsync(IFileEntry entry, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Replace the content stored at <paramref name="entry"/>'s existing location (restoring a backup, saving an
+    /// edited document in place). The content goes through the upload size limit, content-type resolution,
+    /// checksum and encryption like any upload, and <see cref="IFileEntry.Size"/>, <see cref="IFileEntry.Checksum"/>,
+    /// <see cref="IFileEntry.ContentType"/> and <see cref="IFileEntry.Encrypted"/> are updated on the entry.
+    /// Image variants are not regenerated.
+    /// </summary>
+    /// <exception cref="StorageValidationException">The content violates the upload policy.</exception>
+    Task OverwriteAsync(IFileEntry entry, Stream content, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Get a URL a client can use to download the file directly, or <c>null</c> when the provider cannot
     /// produce one (for example Local without a configured <c>PublicBaseUrl</c>, or encrypted content,
     /// which must be read through <see cref="OpenReadAsync"/>).

@@ -51,17 +51,28 @@ public sealed class AzureBlobFileStorageManager : FileStorageManagerBase
         await EnsureContainerAsync(cancellationToken).ConfigureAwait(false);
 
         var blobName = StoragePaths.Combine(_options.Prefix, request.Folder, request.FileName);
-        var tier = request.VariantType == OriginalVariant
+        await UploadAsync(blobName, request.Content, request.ContentType, request.VariantType, cancellationToken).ConfigureAwait(false);
+        return blobName;
+    }
+
+    protected override async Task OverwriteCoreAsync(StorageLocation location, Stream content, long length, string contentType, CancellationToken cancellationToken)
+    {
+        await EnsureContainerAsync(cancellationToken).ConfigureAwait(false);
+        await UploadAsync(location.Location, content, contentType, location.VariantType, cancellationToken).ConfigureAwait(false);
+    }
+
+    private Task UploadAsync(string blobName, Stream content, string contentType, string variantType, CancellationToken cancellationToken)
+    {
+        var tier = variantType == OriginalVariant
             ? ParseTier(_options.AccessTier)
             : ParseTier(_options.VariantAccessTier) ?? ParseTier(_options.AccessTier);
 
-        await _container.GetBlobClient(blobName).UploadAsync(request.Content, new BlobUploadOptions
+        // No request conditions: an existing blob is replaced.
+        return _container.GetBlobClient(blobName).UploadAsync(content, new BlobUploadOptions
         {
-            HttpHeaders = new BlobHttpHeaders { ContentType = request.ContentType },
+            HttpHeaders = new BlobHttpHeaders { ContentType = contentType },
             AccessTier = tier,
-        }, cancellationToken).ConfigureAwait(false);
-
-        return blobName;
+        }, cancellationToken);
     }
 
     protected override async Task<Stream?> OpenReadCoreAsync(StorageLocation location, CancellationToken cancellationToken)

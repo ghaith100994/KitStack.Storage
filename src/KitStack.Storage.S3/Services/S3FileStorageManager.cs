@@ -49,6 +49,13 @@ public sealed class S3FileStorageManager : FileStorageManagerBase, IDisposable
         return key;
     }
 
+    protected override Task OverwriteCoreAsync(StorageLocation location, Stream content, long length, string contentType, CancellationToken cancellationToken)
+    {
+        var target = ResolveTarget(location.VariantType);
+        var (client, bucket) = GetClientAndBucket(target);
+        return UploadStreamAsync(client, bucket, location.Location, content, contentType, target, cancellationToken);
+    }
+
     protected override async Task<Stream?> OpenReadCoreAsync(StorageLocation location, CancellationToken cancellationToken)
     {
         var (client, bucket) = GetClientAndBucket(ResolveTarget(location.VariantType));

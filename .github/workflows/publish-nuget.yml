@@ -81,6 +81,7 @@ jobs:
             KitStack.Storage.Ftp \
             KitStack.Storage.Sftp \
             KitStack.Storage.EntityFrameworkCore \
+            KitStack.Storage.Mongo \
             KitStack.AspNetCore
           do
             echo "Packing $project v$VERSION"

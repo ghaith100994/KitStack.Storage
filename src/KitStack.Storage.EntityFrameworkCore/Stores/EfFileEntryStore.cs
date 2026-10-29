@@ -35,6 +35,25 @@ public sealed class EfFileEntryStore<TContext>(IServiceProvider services) : IFil
     }
 
     /// <inheritdoc/>
+    public Task UpdateAsync(IFileEntry entry, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return RunAsync(async db =>
+        {
+            var record = await db.Set<FileEntryRecord>().FirstOrDefaultAsync(r => r.Id == entry.Id, cancellationToken).ConfigureAwait(false);
+            if (record is null)
+                return;
+            record.Size = entry.Size;
+            record.Checksum = entry.Checksum;
+            record.ContentType = entry.ContentType;
+            record.Encrypted = entry.Encrypted;
+            record.LastAccessedTime = entry.LastAccessedTime;
+            record.Metadata = entry.Metadata is null ? null : new Dictionary<string, string>(entry.Metadata);
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        });
+    }
+
+    /// <inheritdoc/>
     public Task<IFileEntry?> FindAsync(DefaultIdType id, CancellationToken cancellationToken = default)
         => QueryAsync<IFileEntry?>(async db =>
             await db.Set<FileEntryRecord>().AsNoTracking().FirstOrDefaultAsync(r => r.Id == id, cancellationToken).ConfigureAwait(false));

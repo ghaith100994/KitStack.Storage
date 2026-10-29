@@ -45,16 +45,22 @@ public sealed class SftpFileStorageManager : FileStorageManagerBase, IDisposable
     protected override Task<string> WriteCoreAsync(StorageWriteRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var directory = Join(_root, request.Folder);
-        var remotePath = $"{directory}/{request.FileName}";
-        return WithClientAsync(async client =>
+        var remotePath = $"{Join(_root, request.Folder)}/{request.FileName}";
+        return UploadAsync(remotePath, request.Content, cancellationToken);
+    }
+
+    protected override Task OverwriteCoreAsync(StorageLocation location, Stream content, long length, string contentType, CancellationToken cancellationToken)
+        => UploadAsync(location.Location, content, cancellationToken);
+
+    private Task<string> UploadAsync(string remotePath, Stream content, CancellationToken cancellationToken)
+        => WithClientAsync(async client =>
         {
-            if (_options.EnsureRemotePathExists)
-                await EnsureDirectoryAsync(client, directory, cancellationToken).ConfigureAwait(false);
-            await client.UploadFileAsync(request.Content, remotePath, canOverride: true, uploadProgress: null, cancellationToken).ConfigureAwait(false);
+            var slash = remotePath.LastIndexOf('/');
+            if (_options.EnsureRemotePathExists && slash > 0)
+                await EnsureDirectoryAsync(client, remotePath[..slash], cancellationToken).ConfigureAwait(false);
+            await client.UploadFileAsync(content, remotePath, canOverride: true, uploadProgress: null, cancellationToken).ConfigureAwait(false);
             return remotePath;
         }, cancellationToken);
-    }
 
     protected override Task<Stream?> OpenReadCoreAsync(StorageLocation location, CancellationToken cancellationToken)
         => WithClientAsync<Stream?>(async client =>

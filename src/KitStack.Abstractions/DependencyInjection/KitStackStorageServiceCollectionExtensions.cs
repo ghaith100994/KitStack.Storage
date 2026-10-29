@@ -1,10 +1,12 @@
 using KitStack.Abstractions.Exceptions;
+using KitStack.Abstractions.Hosting;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Abstractions.Options;
 using KitStack.Abstractions.Security;
 using KitStack.Abstractions.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace KitStack.Abstractions.DependencyInjection;
@@ -80,7 +82,29 @@ public static class KitStackStorageServiceCollectionExtensions
         services.AddScoped<IFileStorageManager>(sp => new FileEntryTrackingStorageManager(
             sp.GetRequiredKeyedService<IFileStorageManager>(InnerManagerKey),
             sp.GetRequiredService<IFileEntryStore>()));
-        services.AddScoped<FileOrphanSweeper>();
+        services.TryAddScoped<FileOrphanSweeper>();
+        return builder;
+    }
+
+    /// <summary>
+    /// Periodically delete orphaned files (older than <see cref="OrphanSweeperOptions.MinAge"/> and not linked to
+    /// any entity) using the registered <see cref="IFileEntryStore"/>. Opt-in: only enable it once every place
+    /// that keeps a file records a link (<c>StoredFileRef</c> with the EF interceptor, <c>CreateAsync(entity, ...)</c>
+    /// or <see cref="IFileEntryStore.LinkAsync"/>); otherwise files that are still used get deleted.
+    /// Options bind from <c>Storage:OrphanSweeper</c>.
+    /// </summary>
+    public static KitStackStorageBuilder AddOrphanSweeper(this KitStackStorageBuilder builder, Action<OrphanSweeperOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        var section = builder.Configuration.GetSection("OrphanSweeper");
+        builder.Services.AddOptions<OrphanSweeperOptions>()
+            .Configure(section.Bind)
+            .Validate(o => o.Interval > TimeSpan.Zero && o.MinAge >= TimeSpan.Zero && o.BatchSize > 0, "Invalid Storage:OrphanSweeper options.")
+            .ValidateOnStart();
+        if (configure is not null)
+            builder.Services.Configure(configure);
+        builder.Services.TryAddScoped<FileOrphanSweeper>();
+        builder.Services.AddHostedService<FileOrphanSweeperHostedService>();
         return builder;
     }
 

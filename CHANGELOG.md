@@ -16,12 +16,16 @@
 - **`UploadPolicy`** (`Storage:Upload`): `MaxBytes`, `AllowedContentTypes` (wildcards like `image/*`),
   `AllowedExtensions`, enforced before the provider is called.
 - **`StoredFileRef`** value object, plus `OpenReadAsync` / `ExistsAsync` / `DeleteAsync` / `GetUrlAsync` overloads.
+- **`OverwriteAsync`**: replace the bytes at an entry's existing location (restoring a backup, saving an edit in
+  place) on every provider, with the same size limit, content-type resolution, checksum and encryption as uploads.
 - **`ReplaceAsync`** helper: stores the new file, then deletes the old one.
 - **`IFileEntryStore`** contract, `FileEntryTrackingStorageManager` decorator (`AddFileEntryTracking()`) and
   `FileOrphanSweeper`.
 - **`KitStack.Storage.EntityFrameworkCore`**: EF Core `IFileEntryStore`, `ApplyKitStackStorage` / `KitStackStorageDbContext`,
   `OwnsStoredFile` / `OwnsStoredFiles`, `FileReferenceInterceptor` (link on set, unlink on replace/clear/delete)
-  and an opt-in `AddOrphanSweeper()` hosted service.
+  and `IFileEntryStore.UpdateAsync`.
+- **`KitStack.Storage.Mongo`**: MongoDB `IFileEntryStore` (`AddMongoStore()`, configured from `Storage:Database`).
+- Opt-in `AddOrphanSweeper()` hosted service (in `KitStack.Abstractions`), working with any `IFileEntryStore`.
 - **`KitStack.Storage.Azure`**: Azure Blob provider (connection string, service URI or DI-registered
   `BlobServiceClient`; SAS and user-delegation SAS URLs; upload tiers and `SetAccessTierAsync`).
 - **`KitStack.Storage.Sftp`** is now a real SFTP provider on SSH.NET (password or private key, host-key pinning).
@@ -71,4 +75,4 @@
 
 - SixLabors.ImageSharp 4.1.3 (Release builds need `SIXLABORS_LICENSE_KEY`), Microsoft.Extensions.* 10.0.14,
   AWSSDK.S3 4.0.104.6, FluentFTP 55.1.0; new: Azure.Storage.Blobs 12.30.1, SSH.NET 2026.0.0,
-  Microsoft.EntityFrameworkCore.Relational 10.0.14.
+  Microsoft.EntityFrameworkCore.Relational 10.0.14, MongoDB.Driver 3.13.0.

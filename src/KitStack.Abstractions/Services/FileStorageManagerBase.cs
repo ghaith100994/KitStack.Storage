@@ -72,6 +72,13 @@ public abstract class FileStorageManagerBase : IFileStorageManager
     protected virtual Task<Uri?> GetUrlCoreAsync(StorageLocation location, TimeSpan? lifetime, CancellationToken cancellationToken)
         => Task.FromResult<Uri?>(null);
 
+    /// <summary>
+    /// Replace the bytes stored at an existing location. Providers that support
+    /// <see cref="OverwriteAsync"/> override this; the default throws <see cref="NotSupportedException"/>.
+    /// </summary>
+    protected virtual Task OverwriteCoreAsync(StorageLocation location, Stream content, long length, string contentType, CancellationToken cancellationToken)
+        => throw new NotSupportedException($"{GetType().Name} does not support overwriting files in place.");
+
     /// <summary>Value for <see cref="IFileEntry.StoragePath"/>; <c>null</c> (default) when not applicable.</summary>
     protected virtual string? GetStoragePath(string location) => null;
 
@@ -192,6 +199,36 @@ public abstract class FileStorageManagerBase : IFileStorageManager
             : GetUrlCoreAsync(location, lifetime, cancellationToken);
     }
 
+    /// <inheritdoc/>
+    public async Task OverwriteAsync(IFileEntry entry, Stream content, CancellationToken cancellationToken = default)
+    {
+        var location = ToLocation(entry);
+        ArgumentNullException.ThrowIfNull(content);
+
+        var policy = StorageOptions.Upload ?? new UploadPolicy();
+        var extension = string.IsNullOrWhiteSpace(entry.FileExtension) ? StoragePaths.GetExtension(entry.FileLocation) : entry.FileExtension;
+        var spool = await SpooledContent.CreateAsync(content, policy.MaxBytes, cancellationToken).ConfigureAwait(false);
+        await using (spool.ConfigureAwait(false))
+        {
+            var contentType = location.VariantType == OriginalVariant
+                ? ContentTypeResolver.Resolve(spool.Header, extension)
+                : entry.ContentType;
+            if (location.VariantType == OriginalVariant && !policy.IsContentTypeAllowed(contentType))
+                throw new StorageValidationException($"Content type '{contentType}' is not allowed.");
+
+            await InStoredFormAsync(spool.Rewind(), spool.Length, contentType, async (stored, storedLength, storedType) =>
+            {
+                await OverwriteCoreAsync(location, stored, storedLength, storedType, cancellationToken).ConfigureAwait(false);
+                return true;
+            }, cancellationToken).ConfigureAwait(false);
+
+            entry.Size = spool.Length;
+            entry.Checksum = spool.Checksum;
+            entry.ContentType = contentType;
+            entry.Encrypted = Encryptor is not null;
+        }
+    }
+
     // ── Write pipeline ──────────────────────────────────────────────────────
 
     private async Task<IFileEntry> CreateFromFormFileAsync<T>(IFormFile file, string? category, CancellationToken cancellationToken)
@@ -265,23 +302,27 @@ public abstract class FileStorageManagerBase : IFileStorageManager
         }
     }
 
-    private async Task<string> WriteAsync(
+    private Task<string> WriteAsync(
         string folder, string fileName, Stream plaintext, long length, string contentType, string variantType, CancellationToken cancellationToken)
+        => InStoredFormAsync(plaintext, length, contentType, (content, storedLength, storedType) =>
+            WriteCoreAsync(new StorageWriteRequest(folder, fileName, content, storedLength, storedType, variantType), cancellationToken), cancellationToken);
+
+    /// <summary>
+    /// Hand <paramref name="write"/> the bytes as they are stored: the plaintext, or its encrypted form when
+    /// encryption is on (labelled <c>application/octet-stream</c>, since ciphertext is never the plaintext type).
+    /// </summary>
+    private async Task<T> InStoredFormAsync<T>(
+        Stream plaintext, long length, string contentType, Func<Stream, long, string, Task<T>> write, CancellationToken cancellationToken)
     {
         if (Encryptor is null)
-            return await WriteCoreAsync(new StorageWriteRequest(folder, fileName, plaintext, length, contentType, variantType), cancellationToken)
-                .ConfigureAwait(false);
+            return await write(plaintext, length, contentType).ConfigureAwait(false);
 
         var encrypted = length < SpooledContent.MemoryThreshold ? new MemoryStream() : SpooledContent.CreateTempFile();
         await using (encrypted.ConfigureAwait(false))
         {
             await Encryptor.EncryptAsync(plaintext, encrypted, cancellationToken).ConfigureAwait(false);
             encrypted.Seek(0, SeekOrigin.Begin);
-
-            // The stored object is ciphertext, so it is never labelled with the plaintext type.
-            return await WriteCoreAsync(
-                new StorageWriteRequest(folder, fileName, encrypted, encrypted.Length, ContentTypes.OctetStream, variantType),
-                cancellationToken).ConfigureAwait(false);
+            return await write(encrypted, encrypted.Length, ContentTypes.OctetStream).ConfigureAwait(false);
         }
     }
 

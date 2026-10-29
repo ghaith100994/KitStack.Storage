@@ -10,6 +10,12 @@ public interface IFileEntryStore
     /// <summary>Insert a new entry (including its <see cref="IFileEntry.RelatedEntities"/>). Inserting an existing id is a no-op.</summary>
     Task AddAsync(IFileEntry entry, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Update the stored content fields of an existing entry (<c>Size</c>, <c>Checksum</c>, <c>ContentType</c>,
+    /// <c>Encrypted</c>, <c>LastAccessedTime</c>, <c>Metadata</c>) after its bytes were overwritten. Unknown ids are ignored.
+    /// </summary>
+    Task UpdateAsync(IFileEntry entry, CancellationToken cancellationToken = default);
+
     /// <summary>Find an entry by id, or <c>null</c>.</summary>
     Task<IFileEntry?> FindAsync(DefaultIdType id, CancellationToken cancellationToken = default);
 

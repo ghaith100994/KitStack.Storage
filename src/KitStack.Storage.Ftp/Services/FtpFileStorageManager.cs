@@ -41,15 +41,21 @@ public sealed class FtpFileStorageManager : FileStorageManagerBase, IAsyncDispos
     {
         ArgumentNullException.ThrowIfNull(request);
         var remotePath = StoragePaths.Combine(_options.RemotePath, request.Folder, request.FileName);
-        return WithClientAsync(async client =>
+        return UploadAsync(remotePath, request.Content, cancellationToken);
+    }
+
+    protected override Task OverwriteCoreAsync(StorageLocation location, Stream content, long length, string contentType, CancellationToken cancellationToken)
+        => UploadAsync(location.Location, content, cancellationToken);
+
+    private Task<string> UploadAsync(string remotePath, Stream content, CancellationToken cancellationToken)
+        => WithClientAsync(async client =>
         {
-            var status = await client.UploadStream(request.Content, remotePath, FtpRemoteExists.Overwrite,
+            var status = await client.UploadStream(content, remotePath, FtpRemoteExists.Overwrite,
                 createRemoteDir: _options.EnsureRemotePathExists, progress: null, token: cancellationToken).ConfigureAwait(false);
             if (status == FtpStatus.Failed)
                 throw new Abstractions.Exceptions.StorageException($"FTP upload of '{remotePath}' failed.");
             return remotePath;
         }, cancellationToken);
-    }
 
     protected override Task<Stream?> OpenReadCoreAsync(StorageLocation location, CancellationToken cancellationToken)
         => WithClientAsync<Stream?>(async client =>

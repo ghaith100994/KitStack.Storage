@@ -56,6 +56,18 @@ public class InMemoryFileStorageManager : FileStorageManagerBase, IFakeFileStore
         return location;
     }
 
+    protected override async Task OverwriteCoreAsync(StorageLocation location, Stream content, long length, string contentType, CancellationToken cancellationToken)
+    {
+        await SimulateDelayAsync(cancellationToken).ConfigureAwait(false);
+        using var ms = new MemoryStream();
+        await content.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
+
+        var entry = _store.TryGetValue(location.Location, out var existing)
+            ? existing.FileEntry
+            : new Abstractions.Models.FileEntry { FileLocation = location.Location, VariantType = location.VariantType, StorageProvider = StorageProvider };
+        _store[location.Location] = new FakeStoredFile(entry, ms.ToArray());
+    }
+
     protected override void OnEntryCreated(IFileEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);

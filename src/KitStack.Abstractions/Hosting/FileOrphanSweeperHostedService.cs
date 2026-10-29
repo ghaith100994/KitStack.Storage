@@ -4,7 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace KitStack.Storage.EntityFrameworkCore.Hosting;
+namespace KitStack.Abstractions.Hosting;
 
 /// <summary>Runs <see cref="FileOrphanSweeper"/> on a fixed interval.</summary>
 public sealed partial class FileOrphanSweeperHostedService(

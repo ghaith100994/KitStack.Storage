@@ -52,6 +52,13 @@ public sealed class FileEntryTrackingStorageManager(IFileStorageManager inner, I
     }
 
     /// <inheritdoc/>
+    public async Task OverwriteAsync(IFileEntry entry, Stream content, CancellationToken cancellationToken = default)
+    {
+        await inner.OverwriteAsync(entry, content, cancellationToken).ConfigureAwait(false);
+        await store.UpdateAsync(entry, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
     public Task<Uri?> GetUrlAsync(IFileEntry entry, TimeSpan? lifetime = null, CancellationToken cancellationToken = default)
         => inner.GetUrlAsync(entry, lifetime, cancellationToken);
 

@@ -19,6 +19,14 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="EphemeralMongo" />
+    <!-- mongod for linux-x64 shipped inside the package, so Mongo tests need no download on Linux/CI. -->
+    <PackageReference Include="EphemeralMongo8.runtime.linux-x64" GeneratePathProperty="true" ExcludeAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="KitStack.Tests.MongoBinaryDirectory"
+                                    Value="$(PkgEphemeralMongo8_runtime_linux-x64)/runtimes/linux-x64/native/mongodb/bin" />
   </ItemGroup>
 
   <ItemGroup>
@@ -35,5 +43,6 @@
     <ProjectReference Include="..\..\src\KitStack.Storage.Sftp\KitStack.Storage.Sftp.csproj" />
     <ProjectReference Include="..\..\src\KitStack.Storage.Ftp\KitStack.Storage.Ftp.csproj" />
     <ProjectReference Include="..\..\src\KitStack.Storage.S3\KitStack.Storage.S3.csproj" />
+    <ProjectReference Include="..\..\src\KitStack.Storage.Mongo\KitStack.Storage.Mongo.csproj" />
   </ItemGroup>
 </Project>

@@ -44,13 +44,20 @@ public class LocalFileStorageManager : FileStorageManagerBase
     {
         ArgumentNullException.ThrowIfNull(request);
         var relativePath = $"{request.Folder}/{request.FileName}";
+        await WriteFileAsync(relativePath, request.Content, cancellationToken).ConfigureAwait(false);
+        return relativePath;
+    }
+
+    protected override Task OverwriteCoreAsync(StorageLocation location, Stream content, long length, string contentType, CancellationToken cancellationToken)
+        => WriteFileAsync(location.Location, content, cancellationToken);
+
+    private async Task WriteFileAsync(string relativePath, Stream content, CancellationToken cancellationToken)
+    {
         var fullPath = GetFullPathFromRelative(relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
 
         await using (var outFs = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-            await request.Content.CopyToAsync(outFs, cancellationToken).ConfigureAwait(false);
-
-        return relativePath;
+            await content.CopyToAsync(outFs, cancellationToken).ConfigureAwait(false);
     }
 
     protected override Task<Stream?> OpenReadCoreAsync(StorageLocation location, CancellationToken cancellationToken)

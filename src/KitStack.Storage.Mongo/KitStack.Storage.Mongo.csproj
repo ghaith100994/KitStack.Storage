@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Authors>ghaith100994</Authors>
+    <Company>KitStack</Company>
+    <Description>MongoDB metadata store for KitStack.Storage: an IFileEntryStore that records stored files, their entity links and orphans.</Description>
+    <PackageId>KitStack.Storage.Mongo</PackageId>
+    <PackageTags>kitstack storage mongodb metadata</PackageTags>
+    <RepositoryUrl>https://github.com/ghaith100994/KitStack.Storage</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <IncludeReferencedProjects>true</IncludeReferencedProjects>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ghaith100994/KitStack.Storage</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MongoDB.Driver" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KitStack.Abstractions\KitStack.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

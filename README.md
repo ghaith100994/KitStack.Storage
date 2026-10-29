@@ -18,7 +18,8 @@ an EF Core metadata store, and ASP.NET Core integration. Applications only refer
 | `KitStack.Storage.Azure` | Azure Blob provider (SAS URLs, access tiers) |
 | `KitStack.Storage.Sftp` | SFTP provider (SSH.NET, password or key auth, host-key pinning) |
 | `KitStack.Storage.Ftp` | FTP / FTPS provider (FluentFTP) |
-| `KitStack.Storage.EntityFrameworkCore` | EF Core `IFileEntryStore`, `StoredFileRef` mapping, link/unlink interceptor, orphan sweeper |
+| `KitStack.Storage.EntityFrameworkCore` | EF Core `IFileEntryStore`, `StoredFileRef` mapping, link/unlink interceptor |
+| `KitStack.Storage.Mongo` | MongoDB `IFileEntryStore` |
 | `KitStack.Fakes` | In-memory provider for tests |
 | `KitStack.AspNetCore` | Authorised file-download endpoint (no provider dependencies) |
 
@@ -43,6 +44,7 @@ return File(stream, entry.ContentType);
 bool exists = await storage.ExistsAsync(entry);
 Uri? url = await storage.GetUrlAsync(entry, TimeSpan.FromMinutes(10));    // presigned / SAS / PublicBaseUrl
 var updated = await storage.ReplaceAsync<Invoice>(entry, newStream, "v2.pdf", null, "Billing");
+await storage.OverwriteAsync(updated, restoredStream);                     // same location, e.g. restoring a backup
 await storage.DeleteAsync(updated);                                        // also deletes image variants
 ```
 
