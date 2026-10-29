@@ -72,11 +72,15 @@ public static class KitStackStorageServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(builder);
         var services = builder.Services;
 
-        var descriptor = services.LastOrDefault(d => d.ServiceType == typeof(IFileStorageManager) && !d.IsKeyedService)
-            ?? throw new InvalidOperationException("Add a storage provider (for example AddLocal()) before enabling file entry tracking.");
-        if (descriptor.ImplementationType == typeof(FileEntryTrackingStorageManager))
+        // The decorator is registered through a factory, so detect a previous call with a marker:
+        // wrapping twice would make the inner registration resolve to the decorator itself.
+        if (services.Any(d => d.ServiceType == typeof(FileEntryTrackingMarker)))
             return builder;
 
+        var descriptor = services.LastOrDefault(d => d.ServiceType == typeof(IFileStorageManager) && !d.IsKeyedService)
+            ?? throw new InvalidOperationException("Add a storage provider (for example AddLocal()) before enabling file entry tracking.");
+
+        services.AddSingleton<FileEntryTrackingMarker>();
         services.Remove(descriptor);
         services.Add(ToKeyed(descriptor, InnerManagerKey));
         services.AddScoped<IFileStorageManager>(sp => new FileEntryTrackingStorageManager(
@@ -123,6 +127,8 @@ public static class KitStackStorageServiceCollectionExtensions
             return new ServiceDescriptor(descriptor.ServiceType, key, (sp, _) => factory(sp), descriptor.Lifetime);
         return new ServiceDescriptor(descriptor.ServiceType, key, descriptor.ImplementationType!, descriptor.Lifetime);
     }
+
+    private sealed class FileEntryTrackingMarker;
 
     private sealed class StorageOptionsValidator : IValidateOptions<StorageOptions>
     {

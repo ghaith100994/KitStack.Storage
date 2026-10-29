@@ -26,11 +26,17 @@ internal static class SftpClientFactory
         };
 
         var client = new SftpClient(connection);
-        var expected = NormalizeFingerprint(options.HostKeyFingerprint);
-        client.HostKeyReceived += (_, e) =>
-            e.CanTrust = options.AcceptAnyHostKey
-                         || (expected.Length > 0 && string.Equals(expected, NormalizeFingerprint(e.FingerPrintSHA256), StringComparison.Ordinal));
+        client.HostKeyReceived += (_, e) => e.CanTrust = IsTrusted(options, e.FingerPrintSHA256);
         return client;
+    }
+
+    /// <summary>The host key is trusted when it matches the configured fingerprint, or verification is explicitly off.</summary>
+    internal static bool IsTrusted(SftpOptions options, string? presentedSha256)
+    {
+        if (options.AcceptAnyHostKey)
+            return true;
+        var expected = NormalizeFingerprint(options.HostKeyFingerprint);
+        return expected.Length > 0 && string.Equals(expected, NormalizeFingerprint(presentedSha256), StringComparison.Ordinal);
     }
 
     // Accept "SHA256:abc", "abc" and "abc=" for the same key.

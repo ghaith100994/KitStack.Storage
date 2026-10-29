@@ -21,7 +21,7 @@ public sealed class S3PresignedUrlGenerator : IS3PresignedUrlGenerator, IDisposa
         {
             throw new StorageConfigurationException("MainTarget must be configured.");
         }
-        _client = CreateClientForTarget(_options.MainTarget, out _disposed);
+        _client = BuildClient(_options.MainTarget);
     }
 
     public Task<Uri> GeneratePreSignedUploadUrlAsync(string key, TimeSpan expires, string? contentType = null)
@@ -37,7 +37,8 @@ public sealed class S3PresignedUrlGenerator : IS3PresignedUrlGenerator, IDisposa
         var bucket = t.BucketName ?? string.Empty;
         var finalKey = NormalizeKeyWithPrefix(t.Prefix, key);
 
-        using var client = CreateClientForTarget(t, out var _);
+        var client = CreateClientForTarget(t, out var dispose);
+        using var owned = dispose ? client : null;
         var request = new GetPreSignedUrlRequest
         {
             BucketName = bucket,
@@ -60,7 +61,8 @@ public sealed class S3PresignedUrlGenerator : IS3PresignedUrlGenerator, IDisposa
         var bucket = t.BucketName ?? string.Empty;
         var finalKey = NormalizeKeyWithPrefix(t.Prefix, key);
 
-        using var client = CreateClientForTarget(t, out var _);
+        var client = CreateClientForTarget(t, out var dispose);
+        using var owned = dispose ? client : null;
         var request = new GetPreSignedUrlRequest
         {
             BucketName = bucket,
@@ -90,7 +92,13 @@ public sealed class S3PresignedUrlGenerator : IS3PresignedUrlGenerator, IDisposa
             return _client;
         }
 
-        // Build config
+        dispose = true;
+        return BuildClient(target);
+    }
+
+    // Per-target credentials first, then the global options, else the SDK default chain.
+    private AmazonS3Client BuildClient(S3TargetOptions target)
+    {
         var cfg = new AmazonS3Config();
         if (!string.IsNullOrWhiteSpace(target.ServiceUrl))
         {
@@ -100,17 +108,11 @@ public sealed class S3PresignedUrlGenerator : IS3PresignedUrlGenerator, IDisposa
         if (!string.IsNullOrWhiteSpace(target.Region))
             cfg.RegionEndpoint = RegionEndpoint.GetBySystemName(target.Region);
 
-        // Credentials: per-target first, then global options, else default
         var access = target.AccessKeyID ?? _options.AccessKeyID;
         var secret = target.SecretAccessKey ?? _options.SecretAccessKey;
-        if (!string.IsNullOrWhiteSpace(access) && !string.IsNullOrWhiteSpace(secret))
-        {
-            dispose = true;
-            return new AmazonS3Client(new Amazon.Runtime.BasicAWSCredentials(access, secret), cfg);
-        }
-
-        dispose = true;
-        return new AmazonS3Client(cfg);
+        return !string.IsNullOrWhiteSpace(access) && !string.IsNullOrWhiteSpace(secret)
+            ? new AmazonS3Client(new Amazon.Runtime.BasicAWSCredentials(access, secret), cfg)
+            : new AmazonS3Client(cfg);
     }
 
     private static bool TargetsMatch(S3TargetOptions a, S3TargetOptions b)

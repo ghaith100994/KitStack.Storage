@@ -71,6 +71,20 @@
   resolved from DI).
 - `BindSeparateDbContextOptions` is obsolete; use `KitStack.Storage.EntityFrameworkCore`.
 
+### Fixed (found by the 0.2 test suite)
+
+- Azure: uploads without `AccessTier` configured threw `ArgumentNullException` (a `null` tier went through
+  `AccessTier`'s implicit string conversion).
+- FTP: anonymous FTP (no `Username`) could not connect; FluentFTP rejects empty user names, so it now logs in
+  as `anonymous`.
+- `S3PresignedUrlGenerator`: every call for the main bucket threw `NullReferenceException` (the client was read
+  before it was assigned), and a call disposed the shared client.
+- `OwnsStoredFiles`: saving failed on SQLite because the owned table's composite key could not be generated; the
+  table now has its own identity key.
+- `AddFileEntryTracking()` called twice (or after a store method that already enabled it) wrapped the decorator
+  around itself and recursed forever on resolve; it is now idempotent.
+- `StoragePaths.SanitizeCategory` did not split on `\` (wrong `Split` overload).
+
 ### Dependencies
 
 - SixLabors.ImageSharp 4.1.3 (Release builds need `SIXLABORS_LICENSE_KEY`), Microsoft.Extensions.* 10.0.14,

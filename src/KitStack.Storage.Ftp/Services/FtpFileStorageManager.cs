@@ -16,7 +16,7 @@ namespace KitStack.Storage.Ftp.Services;
 public sealed class FtpFileStorageManager : FileStorageManagerBase, IAsyncDisposable, IDisposable
 {
     private readonly FtpOptions _options;
-    private readonly AsyncFtpClient _client;
+    private readonly IAsyncFtpClient _client;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _disposed;
 
@@ -26,13 +26,23 @@ public sealed class FtpFileStorageManager : FileStorageManagerBase, IAsyncDispos
         IOptions<FtpOptions> options,
         IOptions<StorageOptions>? storageOptions = null,
         IFileContentEncryptor? encryptor = null)
+        : this(options, client: null, storageOptions, encryptor)
+    {
+    }
+
+    /// <summary>Test seam: use <paramref name="client"/> instead of a FluentFTP client built from the options.</summary>
+    internal FtpFileStorageManager(
+        IOptions<FtpOptions> options,
+        IAsyncFtpClient? client,
+        IOptions<StorageOptions>? storageOptions = null,
+        IFileContentEncryptor? encryptor = null)
         : base(storageOptions?.Value, encryptor)
     {
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         if (string.IsNullOrWhiteSpace(_options.RemotePath))
             _options.RemotePath = "Files";
-        _client = FtpClientFactory.Create(_options);
+        _client = client ?? FtpClientFactory.Create(_options);
     }
 
     protected override ImageProcessingOptions? GetImageProcessingOptions() => _options.ImageProcessing;
@@ -90,7 +100,7 @@ public sealed class FtpFileStorageManager : FileStorageManagerBase, IAsyncDispos
             return true;
         }, cancellationToken);
 
-    private async Task<T> WithClientAsync<T>(Func<AsyncFtpClient, Task<T>> operation, CancellationToken cancellationToken)
+    private async Task<T> WithClientAsync<T>(Func<IAsyncFtpClient, Task<T>> operation, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);

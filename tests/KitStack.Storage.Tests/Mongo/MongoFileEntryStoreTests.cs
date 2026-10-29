@@ -11,7 +11,7 @@ using KitStack.Storage.Mongo.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 
-namespace KitStack.Storage.Tests;
+namespace KitStack.Storage.Tests.Mongo;
 
 /// <summary>One mongod for all Mongo tests; each test uses its own database.</summary>
 public sealed class MongoFixture : IAsyncLifetime
@@ -19,6 +19,8 @@ public sealed class MongoFixture : IAsyncLifetime
     private IMongoRunner? _runner;
 
     public IMongoClient Client { get; private set; } = null!;
+
+    public string ConnectionString => _runner!.ConnectionString;
 
     public async Task InitializeAsync()
     {
@@ -71,7 +73,7 @@ public sealed class MongoFileEntryStoreTests(MongoFixture mongo) : IClassFixture
         Assert.Equal("v", found.Metadata!["key.with.dots"]);
         Assert.Equal(entry.UploadedTime.ToUnixTimeMilliseconds(), found.UploadedTime.ToUnixTimeMilliseconds());
         Assert.Equal(entry.Id, (await store.FindByLocationAsync(entry.FileLocation))!.Id);
-        Assert.Equal(1, await store.Collection.CountDocumentsAsync(FilterDefinition<Mongo.Documents.FileEntryDocument>.Empty));
+        Assert.Equal(1, await store.Collection.CountDocumentsAsync(FilterDefinition<KitStack.Storage.Mongo.Documents.FileEntryDocument>.Empty));
     }
 
     [Fact]

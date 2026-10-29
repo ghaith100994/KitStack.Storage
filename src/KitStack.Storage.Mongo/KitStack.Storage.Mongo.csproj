@@ -24,4 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\KitStack.Abstractions\KitStack.Abstractions.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="KitStack.Storage.Tests" />
+  </ItemGroup>
 </Project>

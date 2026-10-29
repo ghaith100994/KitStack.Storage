@@ -1,7 +1,7 @@
 using KitStack.Abstractions.Exceptions;
 using KitStack.Abstractions.Utilities;
 
-namespace KitStack.Storage.Tests;
+namespace KitStack.Storage.Tests.Abstractions;
 
 public class StoragePathsTests
 {

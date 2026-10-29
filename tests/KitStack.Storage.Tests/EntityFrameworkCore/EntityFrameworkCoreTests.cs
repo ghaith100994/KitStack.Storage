@@ -11,7 +11,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KitStack.Storage.Tests;
+namespace KitStack.Storage.Tests.EntityFrameworkCore;
 
 public sealed class Contract
 {

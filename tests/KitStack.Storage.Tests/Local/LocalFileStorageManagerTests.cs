@@ -7,7 +7,7 @@ using KitStack.Storage.Local.Services;
 using Microsoft.AspNetCore.Http;
 using MsOptions = Microsoft.Extensions.Options.Options;
 
-namespace KitStack.Storage.Tests;
+namespace KitStack.Storage.Tests.Local;
 
 public sealed class LocalFileStorageManagerTests : IDisposable
 {

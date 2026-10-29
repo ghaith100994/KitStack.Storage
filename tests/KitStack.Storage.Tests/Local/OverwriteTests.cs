@@ -5,7 +5,7 @@ using KitStack.Storage.Local.Options;
 using KitStack.Storage.Local.Services;
 using MsOptions = Microsoft.Extensions.Options.Options;
 
-namespace KitStack.Storage.Tests;
+namespace KitStack.Storage.Tests.Local;
 
 public sealed class OverwriteTests : IDisposable
 {

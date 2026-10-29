@@ -1,7 +1,7 @@
 using System.IO.Compression;
 using KitStack.Abstractions.Utilities;
 
-namespace KitStack.Storage.Tests;
+namespace KitStack.Storage.Tests.Abstractions;
 
 public class ContentTypeResolverTests
 {

@@ -30,4 +30,7 @@
     <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="KitStack.Storage.Tests" />
+  </ItemGroup>
 </Project>

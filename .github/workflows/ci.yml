@@ -28,12 +28,37 @@ jobs:
       - name: Build
         run: dotnet build -c Debug --no-restore
 
+      # --blame-hang-timeout fails a hung test run quickly with a dump instead of waiting for the job timeout.
       - name: Test
-        run: dotnet test -c Debug --no-build --logger "trx;LogFileName=test-results.trx"
+        run: >
+          dotnet test -c Debug --no-build
+          --logger "trx;LogFileName=test-results.trx"
+          --collect:"XPlat Code Coverage"
+          --blame-hang-timeout 5m
+          --results-directory TestResults
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          files = glob.glob('TestResults/**/coverage.cobertura.xml', recursive=True)
+          if not files:
+              raise SystemExit("no coverage report")
+          rows = ["| Package | Line | Branch |", "|---|---|---|"]
+          for pkg in ET.parse(files[0]).getroot().iter('package'):
+              name = pkg.get('name')
+              if name.startswith('KitStack') and 'Tests' not in name and 'Samples' not in name:
+                  rows.append(f"| {name} | {float(pkg.get('line-rate')):.1%} | {float(pkg.get('branch-rate')):.1%} |")
+          with open(__import__('os').environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write("## Coverage\n\n" + "\n".join(rows) + "\n")
+          PY
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: '**/TestResults/*.trx'
+          path: |
+            TestResults/**/*.trx
+            TestResults/**/coverage.cobertura.xml

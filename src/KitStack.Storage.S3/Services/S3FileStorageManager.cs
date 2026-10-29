@@ -21,7 +21,8 @@ public sealed class S3FileStorageManager : FileStorageManagerBase, IDisposable
 {
     private readonly S3Options _options;
     private readonly S3TargetOptions _mainTarget;
-    private readonly ConcurrentDictionary<string, AmazonS3Client> _clients = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, IAmazonS3> _clients = new(StringComparer.Ordinal);
+    private readonly Func<S3TargetOptions, IAmazonS3> _clientFactory;
     private bool _disposed;
 
     protected override string StorageProvider => "S3";
@@ -30,11 +31,22 @@ public sealed class S3FileStorageManager : FileStorageManagerBase, IDisposable
         IOptions<S3Options> options,
         IOptions<StorageOptions>? storageOptions = null,
         IFileContentEncryptor? encryptor = null)
+        : this(options, clientFactory: null, storageOptions, encryptor)
+    {
+    }
+
+    /// <summary>Test seam: <paramref name="clientFactory"/> creates the client for a target.</summary>
+    internal S3FileStorageManager(
+        IOptions<S3Options> options,
+        Func<S3TargetOptions, IAmazonS3>? clientFactory,
+        IOptions<StorageOptions>? storageOptions = null,
+        IFileContentEncryptor? encryptor = null)
         : base(storageOptions?.Value, encryptor)
     {
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _mainTarget = _options.MainTarget;
+        _clientFactory = clientFactory ?? CreateClientForTarget;
     }
 
     protected override ImageProcessingOptions? GetImageProcessingOptions() => _options.ImageProcessing;
@@ -129,7 +141,7 @@ public sealed class S3FileStorageManager : FileStorageManagerBase, IDisposable
         };
     }
 
-    private static async Task UploadStreamAsync(AmazonS3Client client, string bucketName, string key, Stream data, string contentType, S3TargetOptions target, CancellationToken cancellationToken)
+    private static async Task UploadStreamAsync(IAmazonS3 client, string bucketName, string key, Stream data, string contentType, S3TargetOptions target, CancellationToken cancellationToken)
     {
         if (data.CanSeek) data.Seek(0, SeekOrigin.Begin);
 
@@ -197,13 +209,13 @@ public sealed class S3FileStorageManager : FileStorageManagerBase, IDisposable
         return new AmazonS3Client(cfg);
     }
 
-    private (AmazonS3Client client, string bucketName) GetClientAndBucket(S3TargetOptions? target)
+    private (IAmazonS3 client, string bucketName) GetClientAndBucket(S3TargetOptions? target)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         var t = target ?? _mainTarget;
         var bucket = t.BucketName ?? _mainTarget.BucketName!;
         var cacheKey = string.Join('|', t.Region, t.ServiceUrl, t.AccessKeyID, t.SecretAccessKey);
-        return (_clients.GetOrAdd(cacheKey, _ => CreateClientForTarget(t)), bucket);
+        return (_clients.GetOrAdd(cacheKey, _ => _clientFactory(t)), bucket);
     }
 
     /// <summary>

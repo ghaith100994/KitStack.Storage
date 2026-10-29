@@ -177,5 +177,6 @@ public sealed class AzureBlobFileStorageManager : FileStorageManagerBase
     }
 
     private static AccessTier? ParseTier(string? tier)
-        => string.IsNullOrWhiteSpace(tier) ? null : new AccessTier(char.ToUpperInvariant(tier.Trim()[0]) + tier.Trim()[1..].ToLowerInvariant());
+        // (AccessTier?)null: a bare null would go through AccessTier's implicit string conversion and throw.
+        => string.IsNullOrWhiteSpace(tier) ? (AccessTier?)null : new AccessTier(char.ToUpperInvariant(tier.Trim()[0]) + tier.Trim()[1..].ToLowerInvariant());
 }

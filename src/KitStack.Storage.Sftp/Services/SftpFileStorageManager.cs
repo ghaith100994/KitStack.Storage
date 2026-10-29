@@ -19,7 +19,7 @@ namespace KitStack.Storage.Sftp.Services;
 public sealed class SftpFileStorageManager : FileStorageManagerBase, IDisposable
 {
     private readonly SftpOptions _options;
-    private readonly SftpClient _client;
+    private readonly ISftpClient _client;
     private readonly string _root;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly ConcurrentDictionary<string, bool> _knownDirectories = new(StringComparer.Ordinal);
@@ -31,13 +31,23 @@ public sealed class SftpFileStorageManager : FileStorageManagerBase, IDisposable
         IOptions<SftpOptions> options,
         IOptions<StorageOptions>? storageOptions = null,
         IFileContentEncryptor? encryptor = null)
+        : this(options, client: null, storageOptions, encryptor)
+    {
+    }
+
+    /// <summary>Test seam: use <paramref name="client"/> instead of an SSH.NET client built from the options.</summary>
+    internal SftpFileStorageManager(
+        IOptions<SftpOptions> options,
+        ISftpClient? client,
+        IOptions<StorageOptions>? storageOptions = null,
+        IFileContentEncryptor? encryptor = null)
         : base(storageOptions?.Value, encryptor)
     {
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         var remote = string.IsNullOrWhiteSpace(_options.RemotePath) ? "Files" : _options.RemotePath.Trim();
         _root = remote.Length > 1 ? remote.TrimEnd('/') : remote;
-        _client = SftpClientFactory.Create(_options);
+        _client = client ?? SftpClientFactory.Create(_options);
     }
 
     protected override ImageProcessingOptions? GetImageProcessingOptions() => _options.ImageProcessing;
@@ -103,7 +113,7 @@ public sealed class SftpFileStorageManager : FileStorageManagerBase, IDisposable
             return true;
         }, cancellationToken);
 
-    private async Task EnsureDirectoryAsync(SftpClient client, string directory, CancellationToken cancellationToken)
+    private async Task EnsureDirectoryAsync(ISftpClient client, string directory, CancellationToken cancellationToken)
     {
         if (_knownDirectories.ContainsKey(directory))
             return;
@@ -121,7 +131,7 @@ public sealed class SftpFileStorageManager : FileStorageManagerBase, IDisposable
         }
     }
 
-    private async Task<T> WithClientAsync<T>(Func<SftpClient, Task<T>> operation, CancellationToken cancellationToken)
+    private async Task<T> WithClientAsync<T>(Func<ISftpClient, Task<T>> operation, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);

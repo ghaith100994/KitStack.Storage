@@ -101,6 +101,9 @@ public static class KitStackStorageModelBuilderExtensions
         {
             owned.ToTable(tableName, schema);
             owned.WithOwner();
+            // Own identity key: the default composite (owner key + generated Id) cannot be generated on every provider (SQLite).
+            owned.Property<int>("Id");
+            owned.HasKey("Id");
             ConfigureStoredFile(owned);
         });
         return builder;

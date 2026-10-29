@@ -12,9 +12,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System.ComponentModel.DataAnnotations;
 
-namespace KitStack.Storage.Tests;
+namespace KitStack.Storage.Tests.Abstractions;
 
-public class FakeAndDependencyInjectionTests
+public class DependencyInjectionTests
 {
     [Fact]
     public async Task Fake_provider_runs_the_shared_pipeline_and_exposes_its_store()

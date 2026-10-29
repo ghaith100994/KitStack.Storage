@@ -7,7 +7,13 @@ internal static class FtpClientFactory
 {
     public static AsyncFtpClient Create(FtpOptions options)
     {
-        var client = new AsyncFtpClient(options.Host, options.Username ?? string.Empty, options.Password ?? string.Empty, options.Port);
+        // FluentFTP rejects an empty user name; anonymous FTP logs in as "anonymous".
+        var anonymous = string.IsNullOrWhiteSpace(options.Username);
+        var client = new AsyncFtpClient(
+            options.Host,
+            anonymous ? "anonymous" : options.Username!,
+            anonymous ? "anonymous" : options.Password ?? string.Empty,
+            options.Port);
         if (options.UseSsl)
         {
             client.Config.EncryptionMode = FtpEncryptionMode.Explicit;
