@@ -1,6 +1,6 @@
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
-using KitStack.Abstractions.Utilities;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Models;
+using KitStack.Storage.Abstractions.Utilities;
 
 namespace KitStack.Storage.EntityFrameworkCore.Entities;
 

@@ -1,6 +1,6 @@
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Models;
-using KitStack.Abstractions.Options;
+using KitStack.Storage.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.Models;
+using KitStack.Storage.Abstractions.Options;
 using KitStack.Storage.Local.Options;
 using KitStack.Storage.Local.Services;
 using MsOptions = Microsoft.Extensions.Options.Options;

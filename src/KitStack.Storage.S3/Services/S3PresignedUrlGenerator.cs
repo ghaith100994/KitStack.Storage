@@ -1,7 +1,7 @@
 using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
-using KitStack.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.Exceptions;
 using KitStack.Storage.S3.Helpers;
 using KitStack.Storage.S3.Options;
 using Microsoft.Extensions.Options;

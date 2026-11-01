@@ -1,7 +1,7 @@
-using KitStack.Abstractions.Options;
-using KitStack.Fakes.Extensions;
-using KitStack.Fakes.Options;
-using KitStack.Fakes.Services;
+using KitStack.Storage.Abstractions.Options;
+using KitStack.Storage.Fakes.Extensions;
+using KitStack.Storage.Fakes.Options;
+using KitStack.Storage.Fakes.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MsOptions = Microsoft.Extensions.Options.Options;
@@ -32,7 +32,7 @@ public class InMemoryFileStorageManagerTests
     public async Task Overwriting_an_unknown_location_creates_it()
     {
         var fake = new InMemoryFileStorageManager();
-        var entry = new KitStack.Abstractions.Models.FileEntry { FileLocation = "restored/a.txt" };
+        var entry = new KitStack.Storage.Abstractions.Models.FileEntry { FileLocation = "restored/a.txt" };
 
         await fake.OverwriteAsync(entry, new MemoryStream(TestData.Text()));
 
@@ -61,9 +61,9 @@ public class InMemoryFileStorageManagerTests
         var fake = new InMemoryFileStorageManager(MsOptions.Create(new FakeOptions { MaxFileSizeBytes = 100 }), MsOptions.Create(storage));
 
         // The smaller limit (storage: 5) wins; the other settings are kept.
-        await Assert.ThrowsAsync<KitStack.Abstractions.Exceptions.StorageValidationException>(() =>
+        await Assert.ThrowsAsync<KitStack.Storage.Abstractions.Exceptions.StorageValidationException>(() =>
             fake.CreateAsync<Invoice>(new MemoryStream(TestData.Text("123456")), "a.txt", null, "Docs"));
-        await Assert.ThrowsAsync<KitStack.Abstractions.Exceptions.StorageValidationException>(() =>
+        await Assert.ThrowsAsync<KitStack.Storage.Abstractions.Exceptions.StorageValidationException>(() =>
             fake.CreateAsync<Invoice>(new MemoryStream(TestData.Text("1")), "a.csv", null, "Docs"));
         var entry = await fake.CreateAsync<Invoice>(new MemoryStream(TestData.Text("12345")), "a.txt", null, "Docs");
         Assert.True(entry.Encrypted);

@@ -12,7 +12,7 @@ an EF Core metadata store, and ASP.NET Core integration. Applications only refer
 
 | Package | Contents |
 |---|---|
-| `KitStack.Abstractions` | `IFileStorageManager`, `IFileEntry`, `StoredFileRef`, `IFileEntryStore`, upload policy, encryption at rest, the shared provider pipeline and `AddKitStackStorage` |
+| `KitStack.Storage.Abstractions` | `IFileStorageManager`, `IFileEntry`, `StoredFileRef`, `IFileEntryStore`, upload policy, encryption at rest, the shared provider pipeline and `AddKitStackStorage` |
 | `KitStack.Storage.Local` | Local filesystem provider |
 | `KitStack.Storage.S3` | Amazon S3 / S3-compatible provider (presigned URLs, per-variant buckets, SSE) |
 | `KitStack.Storage.Azure` | Azure Blob provider (SAS URLs, access tiers) |
@@ -20,8 +20,8 @@ an EF Core metadata store, and ASP.NET Core integration. Applications only refer
 | `KitStack.Storage.Ftp` | FTP / FTPS provider (FluentFTP) |
 | `KitStack.Storage.EntityFrameworkCore` | EF Core `IFileEntryStore`, `StoredFileRef` mapping, link/unlink interceptor |
 | `KitStack.Storage.Mongo` | MongoDB `IFileEntryStore` |
-| `KitStack.Fakes` | In-memory provider for tests |
-| `KitStack.AspNetCore` | Authorised file-download endpoint (no provider dependencies) |
+| `KitStack.Storage.Fakes` | In-memory provider for tests |
+| `KitStack.Storage.AspNetCore` | Authorised file-download endpoint (no provider dependencies) |
 
 ## Quick start
 
@@ -29,7 +29,7 @@ an EF Core metadata store, and ASP.NET Core integration. Applications only refer
 builder.Services.AddKitStackStorage(builder.Configuration)   // Storage section: policy, encryption
     .AddLocal();                                              // or AddS3(), AddAzureBlob(), AddSftp(), AddFtp(), AddFake()
 
-app.MapKitStackStorageFiles("/files");                         // KitStack.AspNetCore, requires authorization
+app.MapKitStackStorageFiles("/files");                         // KitStack.Storage.AspNetCore, requires authorization
 ```
 
 ```csharp
@@ -104,7 +104,7 @@ public class LegalDocument
 ## Upgrading from 0.1
 
 See [CHANGELOG.md](CHANGELOG.md) for the breaking changes (the `Sftp` → `Ftp` rename, `AddKitStackStorage`
-moving to `KitStack.Abstractions`, anonymous static files becoming opt-in, and encryption now being real).
+moving to `KitStack.Storage.Abstractions`, anonymous static files becoming opt-in, and encryption now being real).
 
 ## Building
 

@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
-using KitStack.Abstractions.Options;
+using KitStack.Storage.Abstractions.Options;
 
 namespace KitStack.Storage.S3.Options;
 

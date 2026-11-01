@@ -1,4 +1,4 @@
-using KitStack.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Interfaces;
 using KitStack.Storage.Mongo.Documents;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;

@@ -1,8 +1,8 @@
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
-using KitStack.Abstractions.Options;
-using KitStack.Abstractions.Security;
+using KitStack.Storage.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Models;
+using KitStack.Storage.Abstractions.Options;
+using KitStack.Storage.Abstractions.Security;
 using Microsoft.AspNetCore.Http;
 
 namespace KitStack.Storage.Tests.Abstractions;

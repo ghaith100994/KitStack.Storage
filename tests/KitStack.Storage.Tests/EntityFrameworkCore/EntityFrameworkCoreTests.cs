@@ -1,9 +1,9 @@
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
-using KitStack.Abstractions.Services;
-using KitStack.Fakes.Contracts;
-using KitStack.Fakes.Extensions;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Models;
+using KitStack.Storage.Abstractions.Services;
+using KitStack.Storage.Fakes.Contracts;
+using KitStack.Storage.Fakes.Extensions;
 using KitStack.Storage.EntityFrameworkCore;
 using KitStack.Storage.EntityFrameworkCore.Configuration;
 using KitStack.Storage.EntityFrameworkCore.Extensions;

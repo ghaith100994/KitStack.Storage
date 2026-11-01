@@ -1,4 +1,4 @@
-using KitStack.Abstractions.Options;
+using KitStack.Storage.Abstractions.Options;
 
 namespace KitStack.Storage.Local.Options;
 
@@ -20,7 +20,7 @@ public class LocalOptions
 
     /// <summary>
     /// Base URL under which the application serves stored files, for example
-    /// <c>https://app.example.com/files</c> when using <c>MapKitStackStorageFiles("/files")</c> from KitStack.AspNetCore.
+    /// <c>https://app.example.com/files</c> when using <c>MapKitStackStorageFiles("/files")</c> from KitStack.Storage.AspNetCore.
     /// <c>GetUrlAsync</c> returns <c>{PublicBaseUrl}/{FileLocation}</c>; when empty it returns <c>null</c>.
     /// </summary>
     public string? PublicBaseUrl { get; set; }

@@ -25,11 +25,11 @@
   `OwnsStoredFile` / `OwnsStoredFiles`, `FileReferenceInterceptor` (link on set, unlink on replace/clear/delete)
   and `IFileEntryStore.UpdateAsync`.
 - **`KitStack.Storage.Mongo`**: MongoDB `IFileEntryStore` (`AddMongoStore()`, configured from `Storage:Database`).
-- Opt-in `AddOrphanSweeper()` hosted service (in `KitStack.Abstractions`), working with any `IFileEntryStore`.
+- Opt-in `AddOrphanSweeper()` hosted service (in `KitStack.Storage.Abstractions`), working with any `IFileEntryStore`.
 - **`KitStack.Storage.Azure`**: Azure Blob provider (connection string, service URI or DI-registered
   `BlobServiceClient`; SAS and user-delegation SAS URLs; upload tiers and `SetAccessTierAsync`).
 - **`KitStack.Storage.Sftp`** is now a real SFTP provider on SSH.NET (password or private key, host-key pinning).
-- **`MapKitStackStorageFiles`** endpoint in `KitStack.AspNetCore`: serves files from any provider through
+- **`MapKitStackStorageFiles`** endpoint in `KitStack.Storage.AspNetCore`: serves files from any provider through
   `OpenReadAsync`, requires authorization by default, supports a per-file `Authorize` callback, ranges and ETags,
   and sends active content (HTML, SVG, ...) as attachments with `nosniff` and a sandbox CSP.
 - `KitStackStorageBuilder` with `AddLocal()`, `AddS3()`, `AddAzureBlob()`, `AddSftp()`, `AddFtp()`, `AddFake()`,
@@ -55,8 +55,19 @@
 
 ### Breaking (API)
 
-- `AddKitStackStorage` moved from `KitStack.AspNetCore` to `KitStack.Abstractions`
-  (`KitStack.Abstractions.DependencyInjection`) and returns a `KitStackStorageBuilder`. `KitStack.AspNetCore` no
+- **Packages and namespaces renamed so every package is under `KitStack.Storage`:**
+
+  | 0.1 package / namespace | 0.2 package / namespace |
+  |---|---|
+  | `KitStack.Abstractions` | `KitStack.Storage.Abstractions` |
+  | `KitStack.Fakes` | `KitStack.Storage.Fakes` |
+  | `KitStack.AspNetCore` | `KitStack.Storage.AspNetCore` |
+
+  Replace the package references and change `using KitStack.Abstractions...` to
+  `using KitStack.Storage.Abstractions...` (likewise for `Fakes` and `AspNetCore`). The 0.1 packages on nuget.org
+  should be marked deprecated with the new package as the alternative.
+- `AddKitStackStorage` moved from `KitStack.Storage.AspNetCore` to `KitStack.Storage.Abstractions`
+  (`KitStack.Storage.Abstractions.DependencyInjection`) and returns a `KitStackStorageBuilder`. `KitStack.Storage.AspNetCore` no
   longer references provider packages: add the provider package and call its builder method, e.g.
   `services.AddKitStackStorage(configuration).AddLocal()`.
 - `UseKitStackStorageEnsureBucketsAsync` was removed (it could never resolve the S3 manager). Use

@@ -20,4 +20,4 @@ publish/
 Thumbs.db
 
 # Files written by the sample app
-src/KitStack.Samples.Web/Files/
+src/KitStack.Storage.Samples.Web/Files/

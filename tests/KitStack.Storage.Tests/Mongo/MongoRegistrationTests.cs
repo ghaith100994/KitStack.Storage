@@ -1,7 +1,7 @@
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
-using KitStack.Fakes.Extensions;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Models;
+using KitStack.Storage.Fakes.Extensions;
 using KitStack.Storage.Mongo;
 using KitStack.Storage.Mongo.Documents;
 using KitStack.Storage.Mongo.Extensions;
@@ -30,7 +30,7 @@ public sealed class MongoRegistrationTests(MongoFixture mongo) : IClassFixture<M
         Assert.Same(sp.GetRequiredService<MongoFileEntryStore>(), store);
         Assert.Equal("files", ((MongoFileEntryStore)store).Collection.CollectionNamespace.CollectionName);
         Assert.Equal(database, ((MongoFileEntryStore)store).Collection.Database.DatabaseNamespace.DatabaseName);
-        Assert.IsNotType<KitStack.Abstractions.Services.FileEntryTrackingStorageManager>(sp.GetRequiredService<IFileStorageManager>());
+        Assert.IsNotType<KitStack.Storage.Abstractions.Services.FileEntryTrackingStorageManager>(sp.GetRequiredService<IFileStorageManager>());
 
         var entry = new FileEntry { FileLocation = "a", LastAccessedTime = null };
         await store.AddAsync(entry);

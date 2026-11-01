@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Interfaces;
 using KitStack.Storage.S3.HealthChecks;
 using KitStack.Storage.S3.Options;
 using KitStack.Storage.S3.Services;

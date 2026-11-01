@@ -2,12 +2,12 @@ using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Options;
-using KitStack.Abstractions.Security;
-using KitStack.Abstractions.Services;
-using KitStack.Abstractions.Utilities;
+using KitStack.Storage.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Options;
+using KitStack.Storage.Abstractions.Security;
+using KitStack.Storage.Abstractions.Services;
+using KitStack.Storage.Abstractions.Utilities;
 using KitStack.Storage.Azure.Options;
 using Microsoft.Extensions.Options;
 

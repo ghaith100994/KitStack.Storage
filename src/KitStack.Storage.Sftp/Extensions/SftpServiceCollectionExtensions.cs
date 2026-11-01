@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Interfaces;
 using KitStack.Storage.Sftp.HealthChecks;
 using KitStack.Storage.Sftp.Options;
 using KitStack.Storage.Sftp.Services;

@@ -1,9 +1,9 @@
 using System.Runtime.InteropServices;
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Options;
-using KitStack.Abstractions.Security;
-using KitStack.Abstractions.Services;
+using KitStack.Storage.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Options;
+using KitStack.Storage.Abstractions.Security;
+using KitStack.Storage.Abstractions.Services;
 using KitStack.Storage.Local.Options;
 using Microsoft.Extensions.Options;
 

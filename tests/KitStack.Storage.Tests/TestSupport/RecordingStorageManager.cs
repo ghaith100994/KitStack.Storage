@@ -1,6 +1,6 @@
-using KitStack.Abstractions.Options;
-using KitStack.Abstractions.Security;
-using KitStack.Abstractions.Services;
+using KitStack.Storage.Abstractions.Options;
+using KitStack.Storage.Abstractions.Security;
+using KitStack.Storage.Abstractions.Services;
 
 namespace KitStack.Storage.Tests;
 

@@ -1,6 +1,6 @@
 using System.Linq.Expressions;
 using System.Text.Json;
-using KitStack.Abstractions.Models;
+using KitStack.Storage.Abstractions.Models;
 using KitStack.Storage.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;

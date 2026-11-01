@@ -1,7 +1,7 @@
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Extensions;
-using KitStack.Abstractions.Models;
-using KitStack.Abstractions.Options;
+using KitStack.Storage.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.Extensions;
+using KitStack.Storage.Abstractions.Models;
+using KitStack.Storage.Abstractions.Options;
 
 namespace KitStack.Storage.Tests.Abstractions;
 
@@ -133,12 +133,12 @@ public class StoredFileRefTests
     [Fact]
     public void Checksum_has_a_default_implementation_for_older_IFileEntry_types()
     {
-        KitStack.Abstractions.Interfaces.IFileEntry legacy = new LegacyEntry();
+        KitStack.Storage.Abstractions.Interfaces.IFileEntry legacy = new LegacyEntry();
         legacy.Checksum = "ignored";
         Assert.Null(legacy.Checksum);
     }
 
-    private sealed class LegacyEntry : KitStack.Abstractions.Interfaces.IFileEntry
+    private sealed class LegacyEntry : KitStack.Storage.Abstractions.Interfaces.IFileEntry
     {
         public Guid Id { get; set; }
         public string FileName { get; set; } = "";

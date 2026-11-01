@@ -1,5 +1,5 @@
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Interfaces;
 using KitStack.Storage.Local.HealthChecks;
 using KitStack.Storage.Local.Options;
 using KitStack.Storage.Local.Services;

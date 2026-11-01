@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\KitStack.Abstractions\KitStack.Abstractions.csproj" />
+    <ProjectReference Include="..\KitStack.Storage.Abstractions\KitStack.Storage.Abstractions.csproj" />
   </ItemGroup>
 
   <ItemGroup>

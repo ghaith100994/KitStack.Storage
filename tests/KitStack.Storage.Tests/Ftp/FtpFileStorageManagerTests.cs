@@ -1,10 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using FluentFTP;
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
-using KitStack.Abstractions.Options;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Models;
+using KitStack.Storage.Abstractions.Options;
 using KitStack.Storage.Ftp.Extensions;
 using KitStack.Storage.Ftp.HealthChecks;
 using KitStack.Storage.Ftp.Options;

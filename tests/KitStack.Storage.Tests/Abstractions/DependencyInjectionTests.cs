@@ -1,9 +1,9 @@
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Options;
-using KitStack.Fakes.Contracts;
-using KitStack.Fakes.Extensions;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Options;
+using KitStack.Storage.Fakes.Contracts;
+using KitStack.Storage.Fakes.Extensions;
 using KitStack.Storage.Azure.Options;
 using KitStack.Storage.Local.Extensions;
 using KitStack.Storage.Sftp.Options;

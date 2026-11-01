@@ -1,10 +1,10 @@
 using System.Net;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Interfaces;
-using KitStack.AspNetCore.Extensions;
-using KitStack.Fakes.Extensions;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.AspNetCore.Extensions;
+using KitStack.Storage.Fakes.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;

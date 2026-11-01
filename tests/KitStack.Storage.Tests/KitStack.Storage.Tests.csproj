@@ -36,9 +36,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\KitStack.Abstractions\KitStack.Abstractions.csproj" />
-    <ProjectReference Include="..\..\src\KitStack.AspNetCore\KitStack.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\src\KitStack.Fakes\KitStack.Fakes.csproj" />
+    <ProjectReference Include="..\..\src\KitStack.Storage.Abstractions\KitStack.Storage.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\KitStack.Storage.AspNetCore\KitStack.Storage.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\KitStack.Storage.Fakes\KitStack.Storage.Fakes.csproj" />
     <ProjectReference Include="..\..\src\KitStack.Storage.Local\KitStack.Storage.Local.csproj" />
     <ProjectReference Include="..\..\src\KitStack.Storage.EntityFrameworkCore\KitStack.Storage.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\src\KitStack.Storage.Azure\KitStack.Storage.Azure.csproj" />
