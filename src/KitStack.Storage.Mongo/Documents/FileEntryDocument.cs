@@ -39,6 +39,18 @@ public sealed class FileEntryDocument
 
     public List<FileLinkDocument> Links { get; set; } = [];
 
+    /// <summary>Storage instance; missing (pre-0.3 documents) means <c>default</c>.</summary>
+    public string? StorageName { get; set; }
+
+    /// <summary>Id of the version this entry replaced.</summary>
+    public Guid? PreviousVersionId { get; set; }
+
+    /// <summary>Version number (missing in pre-0.3 documents: 1).</summary>
+    public int VersionNumber { get; set; } = 1;
+
+    /// <summary>Id of the entry that superseded this one; missing/null for current versions.</summary>
+    public Guid? SupersededById { get; set; }
+
     public static FileEntryDocument From(IFileEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -61,6 +73,10 @@ public sealed class FileEntryDocument
             StorageProvider = entry.StorageProvider,
             LastAccessedTime = entry.LastAccessedTime?.UtcDateTime,
             IsDeleted = entry.IsDeleted,
+            StorageName = entry.StorageName,
+            PreviousVersionId = entry.PreviousVersionId,
+            VersionNumber = entry.VersionNumber < 1 ? 1 : entry.VersionNumber,
+            SupersededById = entry.SupersededById,
             ParentId = entry.Metadata is { } md && md.TryGetValue("OriginalId", out var raw) && Guid.TryParse(raw, out var parent) ? parent : null,
             Links = entry.RelatedEntities?.Select(r => new FileLinkDocument
             {
@@ -92,6 +108,10 @@ public sealed class FileEntryDocument
         StorageProvider = StorageProvider,
         LastAccessedTime = LastAccessedTime is { } accessed ? new DateTimeOffset(DateTime.SpecifyKind(accessed, DateTimeKind.Utc)) : null,
         IsDeleted = IsDeleted,
+        StorageName = StorageName,
+        PreviousVersionId = PreviousVersionId,
+        VersionNumber = VersionNumber < 1 ? 1 : VersionNumber,
+        SupersededById = SupersededById,
         RelatedEntities = Links.Select(l => new FileRelatedEntity
         {
             EntityName = l.EntityName,

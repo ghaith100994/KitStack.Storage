@@ -54,6 +54,10 @@ public sealed class FtpFileStorageManager : FileStorageManagerBase, IAsyncDispos
         return UploadAsync(remotePath, request.Content, cancellationToken);
     }
 
+    /// <inheritdoc/>
+    protected override string? GetWriteLocation(string folder, string fileName, string variantType)
+        => StoragePaths.Combine(_options.RemotePath, folder, fileName);
+
     protected override Task OverwriteCoreAsync(StorageLocation location, Stream content, long length, string contentType, CancellationToken cancellationToken)
         => UploadAsync(location.Location, content, cancellationToken);
 

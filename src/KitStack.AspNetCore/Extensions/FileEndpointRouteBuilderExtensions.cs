@@ -1,4 +1,5 @@
 using KitStack.Abstractions.Exceptions;
+using KitStack.Abstractions.Instances;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Abstractions.Models;
 using KitStack.Abstractions.Utilities;
@@ -42,6 +43,9 @@ public static class FileEndpointRouteBuilderExtensions
     /// <remarks>
     /// With an <see cref="IFileEntryStore"/>, only files recorded in it (and not deleted) are served.
     /// Without one, any location under the provider is served to authorised users.
+    /// Files are read through the storage instance that owns them (<see cref="IFileEntry.StorageName"/>, resolved with
+    /// <see cref="IFileStorageManagerProvider"/>). The location route accepts an optional <c>?storage={name}</c> query
+    /// parameter to pick the instance when locations are not unique across instances.
     /// </remarks>
     public static RouteGroupBuilder MapKitStackStorageFiles(
         this IEndpointRouteBuilder endpoints, string pattern = "/files", Action<KitStackFileEndpointOptions>? configure = null)
@@ -69,11 +73,16 @@ public static class FileEndpointRouteBuilderExtensions
             if (string.IsNullOrWhiteSpace(location))
                 return Results.NotFound();
 
+            string? storageName = http.Request.Query.TryGetValue("storage", out var requested) && !string.IsNullOrWhiteSpace(requested)
+                ? requested.ToString()
+                : null;
             IFileEntry? entry;
             var store = http.RequestServices.GetService<IFileEntryStore>();
             if (store is not null)
             {
-                entry = await store.FindByLocationAsync(location, http.RequestAborted).ConfigureAwait(false);
+                entry = storageName is null
+                    ? await store.FindByLocationAsync(location, http.RequestAborted).ConfigureAwait(false)
+                    : await store.FindByLocationAsync(location, storageName, http.RequestAborted).ConfigureAwait(false);
                 if (entry is null)
                     return Results.NotFound();
             }
@@ -86,6 +95,7 @@ public static class FileEndpointRouteBuilderExtensions
                     FileName = fileName,
                     ContentType = ContentTypeResolver.FromExtension(Path.GetExtension(fileName)),
                     VariantType = null,
+                    StorageName = storageName,
                 };
             }
 
@@ -95,18 +105,27 @@ public static class FileEndpointRouteBuilderExtensions
         return group;
     }
 
+    /// <summary>The instance that owns <paramref name="entry"/>, or the unkeyed manager when no provider is registered.</summary>
+    private static async ValueTask<IFileStorageManager> ResolveStorageAsync(HttpContext http, IFileEntry entry)
+    {
+        var provider = http.RequestServices.GetService<IFileStorageManagerProvider>();
+        if (provider is null)
+            return http.RequestServices.GetRequiredService<IFileStorageManager>();
+        return await provider.GetAsync(StorageInstance.Normalize(entry.StorageName), http.RequestAborted).ConfigureAwait(false);
+    }
+
     private static async Task<IResult> ServeAsync(HttpContext http, IFileEntry entry, KitStackFileEndpointOptions options)
     {
         if (options.Authorize is not null && !await options.Authorize(http, entry).ConfigureAwait(false))
             return Results.Forbid();
 
-        var storage = http.RequestServices.GetRequiredService<IFileStorageManager>();
         Stream stream;
         try
         {
+            var storage = await ResolveStorageAsync(http, entry).ConfigureAwait(false);
             stream = await storage.OpenReadAsync(entry, http.RequestAborted).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is StorageNotFoundException or StorageValidationException)
+        catch (Exception ex) when (ex is StorageNotFoundException or StorageValidationException or StorageInstanceNotFoundException)
         {
             // Validation failures (for example path traversal) are reported as 404 so they reveal nothing.
             return Results.NotFound();

@@ -35,6 +35,18 @@ public class FileEntryRecord : IFileEntry
 
     public ICollection<FileRelatedEntity>? RelatedEntities { get; set; } = [];
 
+    /// <summary>Storage instance that holds the bytes; <c>null</c> (pre-0.3 rows) means <c>default</c>.</summary>
+    public string? StorageName { get; set; }
+
+    /// <summary>Id of the version this entry replaced.</summary>
+    public DefaultIdType? PreviousVersionId { get; set; }
+
+    /// <summary>Version number within the version chain (1 for pre-0.3 rows).</summary>
+    public int VersionNumber { get; set; } = 1;
+
+    /// <summary>Id of the entry that superseded this one; <c>null</c> for current versions.</summary>
+    public DefaultIdType? SupersededById { get; set; }
+
     /// <summary>Copy an <see cref="IFileEntry"/> into a new record.</summary>
     public static FileEntryRecord From(IFileEntry entry)
     {
@@ -63,6 +75,10 @@ public class FileEntryRecord : IFileEntry
             LastAccessedTime = entry.LastAccessedTime,
             IsDeleted = entry.IsDeleted,
             ParentId = parentId,
+            StorageName = entry.StorageName,
+            PreviousVersionId = entry.PreviousVersionId,
+            VersionNumber = entry.VersionNumber < 1 ? 1 : entry.VersionNumber,
+            SupersededById = entry.SupersededById,
             RelatedEntities = entry.RelatedEntities?.Select(r => new FileRelatedEntity
             {
                 EntityId = r.EntityId,

@@ -1,4 +1,5 @@
 using KitStack.Abstractions.DependencyInjection;
+using KitStack.Abstractions.Instances;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Storage.Local.HealthChecks;
 using KitStack.Storage.Local.Options;
@@ -20,12 +21,30 @@ public static class LocalServiceCollectionExtensions
     public static KitStackStorageBuilder AddLocal(this KitStackStorageBuilder builder, Action<LocalOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        builder.AddLocalProvider().AddDefaultStorageInstance(LocalStorageProviderFactory.Type);
         builder.Services.AddLocalStorageManager(builder.Configuration);
         if (configure is not null)
             builder.Services.Configure(configure);
         builder.Services.AddHealthChecks().AddCheck<LocalFileHealthCheck>("kitstack_local");
         return builder;
     }
+
+    /// <summary>
+    /// Register a named Local instance (another root directory), bound from <c>Storage:Instances:{name}:Local</c> and
+    /// <paramref name="configure"/>, with storage overrides from <c>Storage:Instances:{name}</c>. Resolve it with
+    /// <c>IFileStorageManagerProvider.Get(name)</c> or <c>[FromKeyedServices(name)] IFileStorageManager</c>.
+    /// </summary>
+    public static KitStackStorageBuilder AddLocal(this KitStackStorageBuilder builder, string name, Action<LocalOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        if (StorageInstance.IsDefault(name))
+            return builder.AddLocal(configure);
+        return builder.AddLocalProvider().AddNamedStorageInstance(name, LocalStorageProviderFactory.Type, "Local", configure);
+    }
+
+    /// <summary>Register the Local provider factory so runtime instances with <c>ProviderType = "Local"</c> can be built.</summary>
+    public static KitStackStorageBuilder AddLocalProvider(this KitStackStorageBuilder builder)
+        => builder.AddStorageProviderFactory<LocalStorageProviderFactory>();
 
     /// <summary>
     /// Register LocalOptions (bound from the <c>Local</c> sub-section of <paramref name="configuration"/>)

@@ -61,6 +61,10 @@ public sealed class S3FileStorageManager : FileStorageManagerBase, IDisposable
         return key;
     }
 
+    /// <inheritdoc/>
+    protected override string? GetWriteLocation(string folder, string fileName, string variantType)
+        => S3KeyHelper.NormalizeKey(ResolveTarget(variantType).Prefix ?? string.Empty, folder, fileName);
+
     protected override Task OverwriteCoreAsync(StorageLocation location, Stream content, long length, string contentType, CancellationToken cancellationToken)
     {
         var target = ResolveTarget(location.VariantType);

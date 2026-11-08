@@ -55,6 +55,10 @@ public sealed class AzureBlobFileStorageManager : FileStorageManagerBase
         return blobName;
     }
 
+    /// <inheritdoc/>
+    protected override string? GetWriteLocation(string folder, string fileName, string variantType)
+        => StoragePaths.Combine(_options.Prefix, folder, fileName);
+
     protected override async Task OverwriteCoreAsync(StorageLocation location, Stream content, long length, string contentType, CancellationToken cancellationToken)
     {
         await EnsureContainerAsync(cancellationToken).ConfigureAwait(false);

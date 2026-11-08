@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using System.Text.Json;
+using KitStack.Abstractions.Instances;
 using KitStack.Abstractions.Models;
 using KitStack.Storage.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -45,6 +46,8 @@ public static class KitStackStorageModelBuilderExtensions
             b.Property(e => e.OriginalFileName).HasMaxLength(1024);
             b.Property(e => e.StorageProvider).HasMaxLength(50);
             b.Property(e => e.Metadata).HasConversion(MetadataConverter, MetadataComparer);
+            b.Property(e => e.StorageName).HasMaxLength(StorageInstance.MaxNameLength);
+            b.Property(e => e.VersionNumber).HasDefaultValue(1);
 
             if (sqlite)
             {
@@ -56,6 +59,9 @@ public static class KitStackStorageModelBuilderExtensions
             b.HasIndex(e => e.FileLocation);
             b.HasIndex(e => e.ParentId);
             b.HasIndex(e => new { e.IsDeleted, e.UploadedTime });
+            b.HasIndex(e => new { e.StorageName, e.IsDeleted });
+            b.HasIndex(e => new { e.StorageName, e.Checksum });
+            b.HasIndex(e => e.SupersededById);
 
             b.OwnsMany(e => e.RelatedEntities, links =>
             {
@@ -117,6 +123,7 @@ public static class KitStackStorageModelBuilderExtensions
         owned.Property(f => f.ContentType).HasMaxLength(255);
         owned.Property(f => f.Checksum).HasMaxLength(64);
         owned.Property(f => f.StorageProvider).HasMaxLength(50);
+        owned.Property(f => f.StorageName).HasMaxLength(StorageInstance.MaxNameLength);
         owned.HasIndex(f => f.FileEntryId);
     }
 

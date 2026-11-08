@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using KitStack.Abstractions.DependencyInjection;
+using KitStack.Abstractions.Extensions;
+using KitStack.Abstractions.Instances;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Storage.S3.HealthChecks;
 using KitStack.Storage.S3.Options;
@@ -19,11 +21,38 @@ public static class S3ServiceCollectionExtensions
     public static KitStackStorageBuilder AddS3(this KitStackStorageBuilder builder, Action<S3Options>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        builder.AddS3Provider().AddDefaultStorageInstance(S3StorageProviderFactory.Type);
         builder.Services.AddS3StorageManager(builder.Configuration);
         if (configure is not null)
             builder.Services.Configure(configure);
         builder.Services.AddHealthChecks().AddCheck<S3HealthCheck>("kitstack_s3");
         return builder;
+    }
+
+    /// <summary>
+    /// Register a named S3 instance (another bucket, prefix or account), bound from <c>Storage:Instances:{name}:S3</c> and
+    /// <paramref name="configure"/>, with storage overrides from <c>Storage:Instances:{name}</c>. Several named instances
+    /// coexist; resolve them with <c>IFileStorageManagerProvider.Get(name)</c> or <c>[FromKeyedServices(name)]</c>.
+    /// </summary>
+    public static KitStackStorageBuilder AddS3(this KitStackStorageBuilder builder, string name, Action<S3Options>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        if (StorageInstance.IsDefault(name))
+            return builder.AddS3(configure);
+        return builder.AddS3Provider().AddNamedStorageInstance(name, S3StorageProviderFactory.Type, "S3", configure);
+    }
+
+    /// <summary>Register the S3 provider factory so runtime instances with <c>ProviderType = "S3"</c> can be built.</summary>
+    public static KitStackStorageBuilder AddS3Provider(this KitStackStorageBuilder builder)
+        => builder.AddStorageProviderFactory<S3StorageProviderFactory>();
+
+    /// <summary>Create the buckets of the instance <paramref name="storageName"/> that have <c>EnsureBucketExists = true</c>.</summary>
+    public static Task EnsureS3BucketsExistAsync(this IServiceProvider services, string storageName, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        var manager = services.GetRequiredService<IFileStorageManagerProvider>().Get(storageName).Unwrap<S3FileStorageManager>()
+            ?? throw new InvalidOperationException($"Storage instance '{storageName}' is not an S3 instance.");
+        return manager.EnsureBucketsExistAsync(cancellationToken);
     }
 
     /// <summary>
@@ -47,7 +76,7 @@ public static class S3ServiceCollectionExtensions
                 .ValidateOnStart();
 
         services.AddSingleton<S3HealthCheck>();
-        services.AddSingleton<S3FileStorageManager>();
+        services.AddSingleton(CreateManager);
         services.AddSingleton<IFileStorageManager>(sp => sp.GetRequiredService<S3FileStorageManager>());
         services.AddSingleton<IS3PresignedUrlGenerator, S3PresignedUrlGenerator>();
         return services;
@@ -66,9 +95,19 @@ public static class S3ServiceCollectionExtensions
         services.AddSingleton(_ => Microsoft.Extensions.Options.Options.Create(options));
 
         services.AddSingleton<S3HealthCheck>();
-        services.AddSingleton<S3FileStorageManager>();
+        services.AddSingleton(CreateManager);
         services.AddSingleton<IFileStorageManager>(sp => sp.GetRequiredService<S3FileStorageManager>());
         services.AddSingleton<IS3PresignedUrlGenerator, S3PresignedUrlGenerator>();
         return services;
+    }
+
+    private static S3FileStorageManager CreateManager(IServiceProvider sp)
+    {
+        var options = sp.GetRequiredService<IOptions<S3Options>>();
+        return new S3FileStorageManager(
+            options,
+            S3StorageProviderFactory.ClientFactory(sp, options.Value),
+            sp.GetService<IOptions<KitStack.Abstractions.Options.StorageOptions>>(),
+            sp.GetService<KitStack.Abstractions.Security.IFileContentEncryptor>());
     }
 }
