@@ -80,6 +80,9 @@ with the new package as the alternative.
 - `FileOrphanSweeper` has a single constructor `(store, storage = null, logger = null, provider = null)` (source compatible).
 - Entries created by every provider carry `StorageName` (`default` for the unnamed instance) and `Metadata["Folder"]`.
 
+- The publish workflow uses NuGet Trusted Publishing (`NuGet/login`, GitHub OIDC) instead of a stored
+  `NUGET_API_KEY`: it needs a trusted publishing policy on nuget.org and the `NUGET_USER` secret.
+
 ### Migration notes
 
 - **EF Core**: add a migration. New nullable `FileEntries.StorageName` (max 100), `PreviousVersionId`, `SupersededById`,
