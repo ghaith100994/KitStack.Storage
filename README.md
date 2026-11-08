@@ -234,7 +234,7 @@ environment variable (CI reads it from the repository secret of the same name). 
 
 Packages are published by pushing a `v*` tag (`.github/workflows/publish-nuget.yml`). The workflow authenticates with
 NuGet Trusted Publishing: create a trusted publishing policy on nuget.org for this repository and the workflow file
-`publish-nuget.yml`, and set the `NUGET_USER` secret to the nuget.org account that owns the packages. No API key is stored.
+`publish-nuget.yml` on the `ghaith100994` nuget.org account. No API key or secret is stored.
 
 ## License
 

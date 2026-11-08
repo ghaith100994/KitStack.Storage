@@ -81,7 +81,7 @@ with the new package as the alternative.
 - Entries created by every provider carry `StorageName` (`default` for the unnamed instance) and `Metadata["Folder"]`.
 
 - The publish workflow uses NuGet Trusted Publishing (`NuGet/login`, GitHub OIDC) instead of a stored
-  `NUGET_API_KEY`: it needs a trusted publishing policy on nuget.org and the `NUGET_USER` secret.
+  `NUGET_API_KEY`: it needs a trusted publishing policy on the nuget.org account and no secret.
 
 ### Migration notes
 
