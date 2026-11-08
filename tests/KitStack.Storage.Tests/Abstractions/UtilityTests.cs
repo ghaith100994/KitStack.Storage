@@ -1,7 +1,7 @@
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Security;
-using KitStack.Abstractions.Options;
-using KitStack.Abstractions.Utilities;
+using KitStack.Storage.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.Security;
+using KitStack.Storage.Abstractions.Options;
+using KitStack.Storage.Abstractions.Utilities;
 using SixLabors.ImageSharp;
 
 namespace KitStack.Storage.Tests.Abstractions;

@@ -1,5 +1,5 @@
 using System.IO.Compression;
-using KitStack.Abstractions.Utilities;
+using KitStack.Storage.Abstractions.Utilities;
 
 namespace KitStack.Storage.Tests.Abstractions;
 

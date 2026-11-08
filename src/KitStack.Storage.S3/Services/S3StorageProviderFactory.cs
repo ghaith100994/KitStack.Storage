@@ -1,6 +1,6 @@
 using Amazon.S3;
-using KitStack.Abstractions.Instances;
-using KitStack.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Instances;
+using KitStack.Storage.Abstractions.Interfaces;
 using KitStack.Storage.S3.HealthChecks;
 using KitStack.Storage.S3.Options;
 using Microsoft.Extensions.DependencyInjection;

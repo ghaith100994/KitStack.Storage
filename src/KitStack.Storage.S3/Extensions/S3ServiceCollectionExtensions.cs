@@ -1,8 +1,8 @@
 using System.ComponentModel.DataAnnotations;
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Extensions;
-using KitStack.Abstractions.Instances;
-using KitStack.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Extensions;
+using KitStack.Storage.Abstractions.Instances;
+using KitStack.Storage.Abstractions.Interfaces;
 using KitStack.Storage.S3.HealthChecks;
 using KitStack.Storage.S3.Options;
 using KitStack.Storage.S3.Services;
@@ -107,7 +107,7 @@ public static class S3ServiceCollectionExtensions
         return new S3FileStorageManager(
             options,
             S3StorageProviderFactory.ClientFactory(sp, options.Value),
-            sp.GetService<IOptions<KitStack.Abstractions.Options.StorageOptions>>(),
-            sp.GetService<KitStack.Abstractions.Security.IFileContentEncryptor>());
+            sp.GetService<IOptions<KitStack.Storage.Abstractions.Options.StorageOptions>>(),
+            sp.GetService<KitStack.Storage.Abstractions.Security.IFileContentEncryptor>());
     }
 }

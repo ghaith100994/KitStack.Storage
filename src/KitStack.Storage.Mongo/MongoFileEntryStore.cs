@@ -1,7 +1,7 @@
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Instances;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
+using KitStack.Storage.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.Instances;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Models;
 using KitStack.Storage.Mongo.Documents;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;

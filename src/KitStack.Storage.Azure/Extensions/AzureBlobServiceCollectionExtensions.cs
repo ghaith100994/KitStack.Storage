@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Instances;
-using KitStack.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Instances;
+using KitStack.Storage.Abstractions.Interfaces;
 using KitStack.Storage.Azure.HealthChecks;
 using KitStack.Storage.Azure.Options;
 using KitStack.Storage.Azure.Services;

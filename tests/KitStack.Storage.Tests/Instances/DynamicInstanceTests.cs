@@ -1,11 +1,11 @@
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Extensions;
-using KitStack.Abstractions.Instances;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
-using KitStack.Abstractions.Options;
-using KitStack.Fakes.Extensions;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.Extensions;
+using KitStack.Storage.Abstractions.Instances;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Models;
+using KitStack.Storage.Abstractions.Options;
+using KitStack.Storage.Fakes.Extensions;
 using KitStack.Storage.Local.Extensions;
 using KitStack.Storage.S3.Extensions;
 using KitStack.Storage.S3.Services;
@@ -325,7 +325,7 @@ public sealed class DynamicInstanceTests : IDisposable
         await using var sp = Build(configure: b => b.AddFake("shadowed").AddInMemoryStore());
         var provider = sp.GetRequiredService<IFileStorageManagerProvider>();
 
-        Assert.NotNull(provider.Get("shadowed").Unwrap<KitStack.Fakes.Services.InMemoryFileStorageManager>());
+        Assert.NotNull(provider.Get("shadowed").Unwrap<KitStack.Storage.Fakes.Services.InMemoryFileStorageManager>());
         Assert.Empty(_counting.Created);
 
         var entry = await provider.Get("runtime").CreateAsync(new StorageWriteOptions { FileName = "t.txt", Folder = "t" }, new MemoryStream(TestData.Text()));

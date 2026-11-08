@@ -9,7 +9,7 @@ Usage
 
 - Register the provider with `services.AddKitStackStorage(configuration).AddLocal()` (options from `Storage:Local`).
 - Use the `IFileStorageManager` abstraction to upload, read, delete and get URLs.
-- Serve files with `app.MapKitStackStorageFiles("/files")` from KitStack.AspNetCore (authorised by default) and set
+- Serve files with `app.MapKitStackStorageFiles("/files")` from KitStack.Storage.AspNetCore (authorised by default) and set
   `PublicBaseUrl` (for example `https://app.example.com/files`) so `GetUrlAsync` returns links to it.
 - Anonymous static serving of the directory is off by default; `ServeAnonymously: true` restores it.
 

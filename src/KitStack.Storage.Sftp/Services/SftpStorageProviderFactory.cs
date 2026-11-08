@@ -1,5 +1,5 @@
-using KitStack.Abstractions.Instances;
-using KitStack.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Instances;
+using KitStack.Storage.Abstractions.Interfaces;
 using KitStack.Storage.Sftp.HealthChecks;
 using KitStack.Storage.Sftp.Options;
 using Microsoft.Extensions.Diagnostics.HealthChecks;

@@ -1,7 +1,7 @@
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Extensions;
-using KitStack.Abstractions.Models;
-using KitStack.Abstractions.Options;
+using KitStack.Storage.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.Extensions;
+using KitStack.Storage.Abstractions.Models;
+using KitStack.Storage.Abstractions.Options;
 using Microsoft.AspNetCore.Http;
 
 namespace KitStack.Storage.Tests.Abstractions;
@@ -23,7 +23,7 @@ public class EdgeCaseTests
         Assert.Equal(TestData.Text("new"), storage.Files[replaced.FileLocation]);
         Assert.True(storage.Files.ContainsKey(fresh.FileLocation));
         Assert.Single(storage.Deletes);
-        await Assert.ThrowsAsync<ArgumentNullException>(() => ((KitStack.Abstractions.Interfaces.IFileStorageManager)null!).ReplaceAsync<Invoice>(null, form, "Docs"));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => ((KitStack.Storage.Abstractions.Interfaces.IFileStorageManager)null!).ReplaceAsync<Invoice>(null, form, "Docs"));
         await Assert.ThrowsAsync<ArgumentNullException>(() => storage.ReplaceAsync<Invoice>(null, (IFormFile)null!, "Docs"));
         await Assert.ThrowsAsync<ArgumentNullException>(() => storage.OpenReadAsync((StoredFileRef)null!));
     }
@@ -53,5 +53,5 @@ public class EdgeCaseTests
         Assert.Equal(data, await TestData.ReadAllAsync(await storage.OpenReadAsync(entry)));
     }
 
-    private const int SpoolThreshold = KitStack.Abstractions.IO.SpooledContent.MemoryThreshold;
+    private const int SpoolThreshold = KitStack.Storage.Abstractions.IO.SpooledContent.MemoryThreshold;
 }

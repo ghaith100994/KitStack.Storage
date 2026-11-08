@@ -1,7 +1,7 @@
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Models;
 using KitStack.Storage.Local.Extensions;
 using KitStack.Storage.Local.HealthChecks;
 using KitStack.Storage.Local.Options;

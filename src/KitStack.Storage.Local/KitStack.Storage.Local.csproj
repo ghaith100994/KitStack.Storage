@@ -26,7 +26,7 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\KitStack.Abstractions\KitStack.Abstractions.csproj" />
+    <ProjectReference Include="..\KitStack.Storage.Abstractions\KitStack.Storage.Abstractions.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="KitStack.Storage.Tests" />

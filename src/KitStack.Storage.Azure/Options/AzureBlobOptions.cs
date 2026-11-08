@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.RegularExpressions;
-using KitStack.Abstractions.Options;
+using KitStack.Storage.Abstractions.Options;
 
 namespace KitStack.Storage.Azure.Options;
 

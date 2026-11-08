@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Models;
 using KitStack.Storage.EntityFrameworkCore.Entities;
 using KitStack.Storage.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;

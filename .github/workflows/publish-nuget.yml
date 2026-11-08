@@ -73,8 +73,8 @@ jobs:
           mkdir -p $PACK_OUTPUT
 
           for project in \
-            KitStack.Abstractions \
-            KitStack.Fakes \
+            KitStack.Storage.Abstractions \
+            KitStack.Storage.Fakes \
             KitStack.Storage.Local \
             KitStack.Storage.S3 \
             KitStack.Storage.Azure \
@@ -82,7 +82,7 @@ jobs:
             KitStack.Storage.Sftp \
             KitStack.Storage.EntityFrameworkCore \
             KitStack.Storage.Mongo \
-            KitStack.AspNetCore
+            KitStack.Storage.AspNetCore
           do
             echo "Packing $project v$VERSION"
             dotnet pack "src/$project/$project.csproj" \

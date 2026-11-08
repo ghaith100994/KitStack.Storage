@@ -1,6 +1,6 @@
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
-using KitStack.Fakes.Stores;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Models;
+using KitStack.Storage.Fakes.Stores;
 using KitStack.Storage.EntityFrameworkCore;
 using KitStack.Storage.EntityFrameworkCore.Configuration;
 using KitStack.Storage.EntityFrameworkCore.Stores;

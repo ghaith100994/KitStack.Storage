@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Models;
 using KitStack.Storage.Sftp.Extensions;
 using KitStack.Storage.Sftp.HealthChecks;
 using KitStack.Storage.Sftp.Options;

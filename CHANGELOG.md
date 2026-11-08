@@ -2,8 +2,24 @@
 
 ## 0.3.0
 
-All changes are additive: 0.2 code compiles and behaves the same. New interface members have default
-implementations, and every package versions together at 0.3.0.
+Every package versions together at 0.3.0. Apart from the package rename below, the changes are additive: new
+interface members have default implementations, and 0.2 behaviour is unchanged.
+
+### Breaking: packages and namespaces renamed
+
+Every package now lives under `KitStack.Storage`:
+
+| 0.2 package / namespace | 0.3 package / namespace |
+|---|---|
+| `KitStack.Abstractions` | `KitStack.Storage.Abstractions` |
+| `KitStack.Fakes` | `KitStack.Storage.Fakes` |
+| `KitStack.AspNetCore` | `KitStack.Storage.AspNetCore` |
+
+Replace the package references and change `using KitStack.Abstractions...` to `using KitStack.Storage.Abstractions...`
+(likewise for `Fakes` and `AspNetCore`). Type names, members and configuration sections are unchanged, so the rename is a
+search-and-replace. The provider and store packages (`KitStack.Storage.Local`, `.S3`, `.Azure`, `.Sftp`, `.Ftp`,
+`.EntityFrameworkCore`, `.Mongo`) keep their package ids. The 0.2 packages on nuget.org should be marked deprecated
+with the new package as the alternative.
 
 ### Added
 
@@ -49,7 +65,7 @@ implementations, and every package versions together at 0.3.0.
 - **Health and capabilities**: `IStorageHealthProbe.CheckAsync(name)` reusing each provider's health check per instance,
   `AddKitStackStorageHealthChecks()` (`kitstack_storage_{name}`), `StorageCapabilities` per provider type and instance.
 - **S3**: `IS3ClientFactory` to supply clients; `EnsureS3BucketsExistAsync(storageName)`.
-- **KitStack.Fakes**: `AddFake("name")` (keyed `IFakeFileStore`), `FakeStorageProviderFactory`, `InMemoryFileEntryStore`
+- **KitStack.Storage.Fakes**: `AddFake("name")` (keyed `IFakeFileStore`), `FakeStorageProviderFactory`, `InMemoryFileEntryStore`
   and `AddInMemoryStore()`.
 - `FileStorageManagerExtensions.Unwrap<T>()`, non-generic `ReplaceAsync(existing, options, content)`.
 

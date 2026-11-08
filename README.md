@@ -12,7 +12,7 @@ an EF Core metadata store, and ASP.NET Core integration. Applications only refer
 
 | Package | Contents |
 |---|---|
-| `KitStack.Abstractions` | `IFileStorageManager`, `IFileEntry`, `StoredFileRef`, `IFileEntryStore`, upload policy, encryption at rest, the shared provider pipeline and `AddKitStackStorage` |
+| `KitStack.Storage.Abstractions` | `IFileStorageManager`, `IFileEntry`, `StoredFileRef`, `IFileEntryStore`, upload policy, encryption at rest, the shared provider pipeline and `AddKitStackStorage` |
 | `KitStack.Storage.Local` | Local filesystem provider |
 | `KitStack.Storage.S3` | Amazon S3 / S3-compatible provider (presigned URLs, per-variant buckets, SSE) |
 | `KitStack.Storage.Azure` | Azure Blob provider (SAS URLs, access tiers) |
@@ -20,8 +20,8 @@ an EF Core metadata store, and ASP.NET Core integration. Applications only refer
 | `KitStack.Storage.Ftp` | FTP / FTPS provider (FluentFTP) |
 | `KitStack.Storage.EntityFrameworkCore` | EF Core `IFileEntryStore`, `StoredFileRef` mapping, link/unlink interceptor |
 | `KitStack.Storage.Mongo` | MongoDB `IFileEntryStore` |
-| `KitStack.Fakes` | In-memory provider, provider factory and `IFileEntryStore` for tests |
-| `KitStack.AspNetCore` | Authorised file-download endpoint (no provider dependencies) |
+| `KitStack.Storage.Fakes` | In-memory provider, provider factory and `IFileEntryStore` for tests |
+| `KitStack.Storage.AspNetCore` | Authorised file-download endpoint (no provider dependencies) |
 
 ## Quick start
 
@@ -29,7 +29,7 @@ an EF Core metadata store, and ASP.NET Core integration. Applications only refer
 builder.Services.AddKitStackStorage(builder.Configuration)   // Storage section: policy, encryption
     .AddLocal();                                              // or AddS3(), AddAzureBlob(), AddSftp(), AddFtp(), AddFake()
 
-app.MapKitStackStorageFiles("/files");                         // KitStack.AspNetCore, requires authorization
+app.MapKitStackStorageFiles("/files");                         // KitStack.Storage.AspNetCore, requires authorization
 ```
 
 ```csharp
@@ -91,7 +91,7 @@ else storage.AddLocal();
 
 One application can use several storage instances at once, each with its own provider, settings, upload policy,
 encryption key and credentials. The instance registered without a name is `default` and is still the unkeyed
-`IFileStorageManager`, so 0.2 code keeps working unchanged.
+`IFileStorageManager`, so single-instance code keeps working unchanged.
 
 ### Static instances (configuration)
 
@@ -215,9 +215,12 @@ public class LegalDocument
 
 ## Upgrading
 
-0.3 is additive; see [CHANGELOG.md](CHANGELOG.md) for the new database columns (EF Core migration) and MongoDB
-fields. For 0.1 → 0.2 see the same file for the breaking changes (the `Sftp` → `Ftp` rename, `AddKitStackStorage`
-moving to `KitStack.Abstractions`, anonymous static files becoming opt-in, and encryption now being real).
+0.3 renames three packages and their namespaces: `KitStack.Abstractions` → `KitStack.Storage.Abstractions`,
+`KitStack.Fakes` → `KitStack.Storage.Fakes`, `KitStack.AspNetCore` → `KitStack.Storage.AspNetCore` (swap the package
+references and update the `using` lines; type names are unchanged). Everything else in 0.3 is additive; see
+[CHANGELOG.md](CHANGELOG.md) for the new database columns (EF Core migration) and MongoDB fields. For 0.1 → 0.2 see the
+same file for the breaking changes (the `Sftp` → `Ftp` rename, `AddKitStackStorage` moving to the abstractions package,
+anonymous static files becoming opt-in, and encryption now being real).
 
 ## Building
 

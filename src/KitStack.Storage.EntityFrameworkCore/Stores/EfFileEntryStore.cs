@@ -1,6 +1,6 @@
-using KitStack.Abstractions.Instances;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
+using KitStack.Storage.Abstractions.Instances;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Models;
 using KitStack.Storage.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -323,9 +323,9 @@ public sealed class EfFileEntryStore<TContext>(IServiceProvider services) : IFil
         {
             var records = await db.Set<FileEntryRecord>().Where(r => r.Id == previousId || r.Id == newId).ToListAsync(cancellationToken).ConfigureAwait(false);
             var previous = records.FirstOrDefault(r => r.Id == previousId)
-                ?? throw new KitStack.Abstractions.Exceptions.StorageNotFoundException($"File entry '{previousId}' was not found.");
+                ?? throw new KitStack.Storage.Abstractions.Exceptions.StorageNotFoundException($"File entry '{previousId}' was not found.");
             var current = records.FirstOrDefault(r => r.Id == newId)
-                ?? throw new KitStack.Abstractions.Exceptions.StorageNotFoundException($"File entry '{newId}' was not found.");
+                ?? throw new KitStack.Storage.Abstractions.Exceptions.StorageNotFoundException($"File entry '{newId}' was not found.");
             ApplySupersede(previous, current);
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         });

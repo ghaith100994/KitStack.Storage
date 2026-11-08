@@ -1,5 +1,5 @@
-using KitStack.Abstractions.Exceptions;
-using KitStack.Abstractions.IO;
+using KitStack.Storage.Abstractions.Exceptions;
+using KitStack.Storage.Abstractions.IO;
 
 namespace KitStack.Storage.Tests.Abstractions;
 

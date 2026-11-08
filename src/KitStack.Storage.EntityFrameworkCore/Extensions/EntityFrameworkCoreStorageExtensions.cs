@@ -1,6 +1,6 @@
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Services;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Services;
 using KitStack.Storage.EntityFrameworkCore.Interceptors;
 using KitStack.Storage.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;

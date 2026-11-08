@@ -1,11 +1,11 @@
 using System.Net;
 using System.Net.Http.Headers;
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Options;
-using KitStack.AspNetCore.Db;
-using KitStack.AspNetCore.Extensions;
-using KitStack.Fakes.Extensions;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Options;
+using KitStack.Storage.AspNetCore.Db;
+using KitStack.Storage.AspNetCore.Extensions;
+using KitStack.Storage.Fakes.Extensions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -158,7 +158,7 @@ public sealed class StaticFilesOptInTests : IDisposable
     [Fact]
     public void Arguments_are_checked()
     {
-        Assert.Throws<ArgumentNullException>(() => KitStack.AspNetCore.Extensions.ApplicationBuilderExtensions.UseKitStackStorage(null!, new ConfigurationBuilder().Build()));
+        Assert.Throws<ArgumentNullException>(() => KitStack.Storage.AspNetCore.Extensions.ApplicationBuilderExtensions.UseKitStackStorage(null!, new ConfigurationBuilder().Build()));
         Assert.Throws<ArgumentNullException>(() => FileEndpointRouteBuilderExtensions.MapKitStackStorageFiles(null!));
     }
 

@@ -1,10 +1,10 @@
-using KitStack.Abstractions.DependencyInjection;
-using KitStack.Abstractions.Hosting;
-using KitStack.Abstractions.Interfaces;
-using KitStack.Abstractions.Models;
-using KitStack.Abstractions.Services;
-using KitStack.Fakes.Contracts;
-using KitStack.Fakes.Extensions;
+using KitStack.Storage.Abstractions.DependencyInjection;
+using KitStack.Storage.Abstractions.Hosting;
+using KitStack.Storage.Abstractions.Interfaces;
+using KitStack.Storage.Abstractions.Models;
+using KitStack.Storage.Abstractions.Services;
+using KitStack.Storage.Fakes.Contracts;
+using KitStack.Storage.Fakes.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,7 +16,7 @@ namespace KitStack.Storage.Tests.Abstractions;
 
 public class FileEntryTrackingStorageManagerTests
 {
-    private readonly RecordingStorageManager _inner = new(images: new KitStack.Abstractions.Options.ImageProcessingOptions());
+    private readonly RecordingStorageManager _inner = new(images: new KitStack.Storage.Abstractions.Options.ImageProcessingOptions());
     private readonly IFileEntryStore _store = Substitute.For<IFileEntryStore>();
     private FileEntryTrackingStorageManager Tracked => new(_inner, _store);
 
@@ -198,7 +198,7 @@ public class BuilderTests
         Assert.False(builder.IsProvider("Fake"));
 
         using var sp = builder.Services.BuildServiceProvider();
-        var options = sp.GetRequiredService<IOptions<KitStack.Abstractions.Options.StorageOptions>>().Value;
+        var options = sp.GetRequiredService<IOptions<KitStack.Storage.Abstractions.Options.StorageOptions>>().Value;
         Assert.Equal(("Fake", 7L), (options.Provider, options.Upload.MaxBytes));
     }
 
@@ -206,7 +206,7 @@ public class BuilderTests
     public void Negative_size_limit_fails_validation()
     {
         using var sp = new ServiceCollection().AddKitStackStorage(o => o.Upload.MaxBytes = -1).Services.BuildServiceProvider();
-        Assert.Throws<OptionsValidationException>(() => sp.GetRequiredService<IOptions<KitStack.Abstractions.Options.StorageOptions>>().Value);
+        Assert.Throws<OptionsValidationException>(() => sp.GetRequiredService<IOptions<KitStack.Storage.Abstractions.Options.StorageOptions>>().Value);
     }
 
     [Fact]
