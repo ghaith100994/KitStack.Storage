@@ -1,6 +1,9 @@
 name: Publish NuGet packages
 
 # Packs and publishes KitStack.* packages to nuget.org when a tag like v1.2.3 is pushed.
+# Authenticates with NuGet Trusted Publishing: GitHub's OIDC token is exchanged for a short-lived API key,
+# so no long-lived NUGET_API_KEY secret is stored. Requires a trusted publishing policy on nuget.org for
+# this repository and workflow file (publish-nuget.yml), and the NUGET_USER secret (the nuget.org account name).
 on:
   push:
     tags:
@@ -12,6 +15,7 @@ concurrency:
 
 permissions:
   contents: read
+  id-token: write   # GitHub OIDC token for NuGet Trusted Publishing
 
 env:
   PACK_OUTPUT: ./nupkg
@@ -133,15 +137,28 @@ jobs:
             fi
           done
 
+      - name: Check NuGet user secret
+        env:
+          NUGET_USER: ${{ secrets.NUGET_USER }}
+        run: |
+          if [ -z "${NUGET_USER:-}" ]; then
+            echo "::error::NUGET_USER secret is not set. Set it to the nuget.org account (user or organization profile name) that owns the trusted publishing policy."
+            exit 1
+          fi
+
+      # Exchanges the workflow's OIDC token for a short-lived nuget.org API key. Kept right before the
+      # push so the key is used well within its validity.
+      - name: NuGet login (Trusted Publishing)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
       - name: Publish to NuGet (push all nupkg + snupkg)
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: |
           set -euo pipefail
-          if [ -z "${NUGET_API_KEY:-}" ]; then
-            echo "NUGET_API_KEY secret is not set. Skipping publish."
-            exit 78
-          fi
 
           echo "Pushing packages in $PACK_OUTPUT to nuget.org"
           for pkg in $PACK_OUTPUT/*.nupkg; do
