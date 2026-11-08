@@ -59,6 +59,9 @@ public sealed class SftpFileStorageManager : FileStorageManagerBase, IDisposable
         return UploadAsync(remotePath, request.Content, cancellationToken);
     }
 
+    /// <inheritdoc/>
+    protected override string? GetWriteLocation(string folder, string fileName, string variantType) => $"{Join(_root, folder)}/{fileName}";
+
     protected override Task OverwriteCoreAsync(StorageLocation location, Stream content, long length, string contentType, CancellationToken cancellationToken)
         => UploadAsync(location.Location, content, cancellationToken);
 

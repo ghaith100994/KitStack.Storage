@@ -35,6 +35,31 @@ public static class StoragePaths
         return sanitized;
     }
 
+    /// <summary>
+    /// Sanitize an explicit relative folder such as <c>hrm/employees/documents</c>. '/' or '\' separate levels.
+    /// </summary>
+    /// <exception cref="StorageValidationException">
+    /// The folder is empty, absolute (leading separator or drive), or contains a <c>.</c> or <c>..</c> segment.
+    /// </exception>
+    public static string SanitizeFolder(string folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder))
+            throw new StorageValidationException("Folder is required.");
+
+        var trimmed = folder.Trim();
+        if (trimmed[0] is '/' or '\\' || trimmed.Contains(':', StringComparison.Ordinal) || trimmed.StartsWith('~'))
+            throw new StorageValidationException("Folder must be a relative path.");
+
+        var segments = trimmed.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (segments.Any(s => s is "." or ".."))
+            throw new StorageValidationException("Folder must not contain relative path segments.");
+
+        var sanitized = Combine(segments.Select(SanitizeSegment).ToArray());
+        if (sanitized.Length == 0)
+            throw new StorageValidationException("Folder is required.");
+        return sanitized;
+    }
+
     /// <summary>Sanitize a single path segment (no separators). Returns "file" when nothing usable is left.</summary>
     public static string SanitizeSegment(string? value)
     {

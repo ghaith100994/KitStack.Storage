@@ -14,6 +14,7 @@ Unit and integration tests for every package, one folder per library:
 | `EntityFrameworkCore/` | EF store, owned types, interceptor (same and separate database, sync and async, failed saves) | SQLite in memory |
 | `Mongo/` | Mongo store and registration | A real `mongod` (EphemeralMongo; on linux-x64 the binary bundled in `EphemeralMongo8.runtime.linux-x64`, elsewhere downloaded) |
 | `AspNetCore/` | File endpoint (auth, per-file auth, headers, ETag, ranges), static-file opt-in | `TestServer` |
+| `Instances/` | 0.3: named and runtime instances (caching, version rebuilds, invalidation, deferred disposal, concurrency), secrets and redaction, test connection, per-instance policy and encryption, explicit folders, transfers, versions, store contract (query, usage, duplicates, relocation) on every store, sweeper and endpoint routing, health probes, capabilities | Fakes, Local, mocked S3 (`IS3ClientFactory`), SQLite, EphemeralMongo, `TestServer`; `FileEntryStoreContractTests` runs the same cases against the EF Core, MongoDB and in-memory stores |
 
 Health checks for S3, FTP and SFTP are exercised against an unreachable local port, so no external service is needed.
 

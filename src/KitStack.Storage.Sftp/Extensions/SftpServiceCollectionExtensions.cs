@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using KitStack.Abstractions.DependencyInjection;
+using KitStack.Abstractions.Instances;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Storage.Sftp.HealthChecks;
 using KitStack.Storage.Sftp.Options;
@@ -19,12 +20,30 @@ public static class SftpServiceCollectionExtensions
     public static KitStackStorageBuilder AddSftp(this KitStackStorageBuilder builder, Action<SftpOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        builder.AddSftpProvider().AddDefaultStorageInstance(SftpStorageProviderFactory.Type);
         builder.Services.AddSftpStorageManager(builder.Configuration);
         if (configure is not null)
             builder.Services.Configure(configure);
         builder.Services.AddHealthChecks().AddCheck<SftpHealthCheck>("kitstack_sftp");
         return builder;
     }
+
+    /// <summary>
+    /// Register a named instance (an SFTP server or remote path), bound from <c>Storage:Instances:{name}:Sftp</c> and <paramref name="configure"/>,
+    /// with storage overrides from <c>Storage:Instances:{name}</c>. Resolve it with <c>IFileStorageManagerProvider.Get(name)</c>
+    /// or <c>[FromKeyedServices(name)] IFileStorageManager</c>.
+    /// </summary>
+    public static KitStackStorageBuilder AddSftp(this KitStackStorageBuilder builder, string name, Action<SftpOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        if (StorageInstance.IsDefault(name))
+            return builder.AddSftp(configure);
+        return builder.AddSftpProvider().AddNamedStorageInstance(name, SftpStorageProviderFactory.Type, "Sftp", configure);
+    }
+
+    /// <summary>Register the provider factory so runtime instances with <c>ProviderType = "Sftp"</c> can be built.</summary>
+    public static KitStackStorageBuilder AddSftpProvider(this KitStackStorageBuilder builder)
+        => builder.AddStorageProviderFactory<SftpStorageProviderFactory>();
 
     public static IServiceCollection AddSftpStorageManager(this IServiceCollection services, IConfiguration configuration)
     {

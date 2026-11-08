@@ -40,6 +40,37 @@ public static class FileStorageManagerExtensions
         return created;
     }
 
+    /// <summary>
+    /// Non-generic <c>ReplaceAsync</c>: store a new file described by <paramref name="options"/>, then delete
+    /// <paramref name="existing"/>. To keep the replaced file as a previous version use <c>IFileVersionService.ReplaceAsync</c>.
+    /// </summary>
+    public static async Task<IFileEntry> ReplaceAsync(
+        this IFileStorageManager storage, IFileEntry? existing, StorageWriteOptions options, Stream content, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(storage);
+        var created = await storage.CreateAsync(options, content, cancellationToken).ConfigureAwait(false);
+        if (existing is not null)
+            await storage.DeleteAsync(existing, cancellationToken).ConfigureAwait(false);
+        return created;
+    }
+
+    /// <summary>
+    /// The first manager of type <typeparamref name="T"/> in the decorator chain of <paramref name="storage"/>
+    /// (for example the <c>S3FileStorageManager</c> behind tracking and instance lifetime wrappers), or <c>null</c>.
+    /// </summary>
+    public static T? Unwrap<T>(this IFileStorageManager storage) where T : class
+    {
+        var current = storage;
+        for (var depth = 0; current is not null && depth < 16; depth++)
+        {
+            if (current is T match)
+                return match;
+            current = (current as IFileStorageManagerDecorator)?.Inner;
+        }
+
+        return null;
+    }
+
     /// <summary>Open the file a <see cref="StoredFileRef"/> points at.</summary>
     public static Task<Stream> OpenReadAsync(this IFileStorageManager storage, StoredFileRef file, CancellationToken cancellationToken = default)
         => Require(storage).OpenReadAsync(ToEntry(file), cancellationToken);

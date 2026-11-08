@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using KitStack.Abstractions.DependencyInjection;
+using KitStack.Abstractions.Instances;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Storage.Ftp.HealthChecks;
 using KitStack.Storage.Ftp.Options;
@@ -19,12 +20,30 @@ public static class FtpServiceCollectionExtensions
     public static KitStackStorageBuilder AddFtp(this KitStackStorageBuilder builder, Action<FtpOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        builder.AddFtpProvider().AddDefaultStorageInstance(FtpStorageProviderFactory.Type);
         builder.Services.AddFtpStorageManager(builder.Configuration);
         if (configure is not null)
             builder.Services.Configure(configure);
         builder.Services.AddHealthChecks().AddCheck<FtpHealthCheck>("kitstack_ftp");
         return builder;
     }
+
+    /// <summary>
+    /// Register a named instance (an FTP server or remote path), bound from <c>Storage:Instances:{name}:Ftp</c> and <paramref name="configure"/>,
+    /// with storage overrides from <c>Storage:Instances:{name}</c>. Resolve it with <c>IFileStorageManagerProvider.Get(name)</c>
+    /// or <c>[FromKeyedServices(name)] IFileStorageManager</c>.
+    /// </summary>
+    public static KitStackStorageBuilder AddFtp(this KitStackStorageBuilder builder, string name, Action<FtpOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        if (StorageInstance.IsDefault(name))
+            return builder.AddFtp(configure);
+        return builder.AddFtpProvider().AddNamedStorageInstance(name, FtpStorageProviderFactory.Type, "Ftp", configure);
+    }
+
+    /// <summary>Register the provider factory so runtime instances with <c>ProviderType = "Ftp"</c> can be built.</summary>
+    public static KitStackStorageBuilder AddFtpProvider(this KitStackStorageBuilder builder)
+        => builder.AddStorageProviderFactory<FtpStorageProviderFactory>();
 
     public static IServiceCollection AddFtpStorageManager(this IServiceCollection services, IConfiguration configuration)
     {

@@ -26,6 +26,12 @@ public class StorageOptions
     /// </summary>
     public IList<string> PreviousEncryptionKeys { get; } = [];
 
+    /// <summary>
+    /// Name of the storage instance these options belong to. Set by the library on the resolved per-instance options;
+    /// <c>null</c> means <c>default</c>. Not meant to be configured.
+    /// </summary>
+    public string? InstanceName { get; set; }
+
     /// <summary>Upload rules enforced before any provider is called.</summary>
     public UploadPolicy Upload { get; set; } = new();
 }

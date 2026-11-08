@@ -11,7 +11,7 @@ namespace KitStack.Storage.S3.HealthChecks;
 
 public sealed class S3HealthCheck : IHealthCheck, IDisposable
 {
-    private readonly AmazonS3Client _client;
+    private readonly IAmazonS3 _client;
     private readonly S3Options _options;
     private bool _disposed;
 
@@ -44,6 +44,13 @@ public sealed class S3HealthCheck : IHealthCheck, IDisposable
         _client = !string.IsNullOrWhiteSpace(access) && !string.IsNullOrWhiteSpace(secret)
             ? new AmazonS3Client(new BasicAWSCredentials(access, secret), config)
             : new AmazonS3Client(config);
+    }
+
+    /// <summary>Probe with a client supplied by an <c>IS3ClientFactory</c>; the check owns (and disposes) it.</summary>
+    internal S3HealthCheck(S3Options options, Amazon.S3.IAmazonS3 client)
+    {
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _client = client ?? throw new ArgumentNullException(nameof(client));
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)

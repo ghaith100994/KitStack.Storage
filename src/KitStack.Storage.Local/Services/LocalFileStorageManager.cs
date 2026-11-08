@@ -48,6 +48,9 @@ public class LocalFileStorageManager : FileStorageManagerBase
         return relativePath;
     }
 
+    /// <inheritdoc/>
+    protected override string? GetWriteLocation(string folder, string fileName, string variantType) => $"{folder}/{fileName}";
+
     protected override Task OverwriteCoreAsync(StorageLocation location, Stream content, long length, string contentType, CancellationToken cancellationToken)
         => WriteFileAsync(location.Location, content, cancellationToken);
 

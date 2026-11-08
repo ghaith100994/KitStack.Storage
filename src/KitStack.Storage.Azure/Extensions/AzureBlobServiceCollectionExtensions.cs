@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using KitStack.Abstractions.DependencyInjection;
+using KitStack.Abstractions.Instances;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Storage.Azure.HealthChecks;
 using KitStack.Storage.Azure.Options;
@@ -19,12 +20,30 @@ public static class AzureBlobServiceCollectionExtensions
     public static KitStackStorageBuilder AddAzureBlob(this KitStackStorageBuilder builder, Action<AzureBlobOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        builder.AddAzureBlobProvider().AddDefaultStorageInstance(AzureBlobStorageProviderFactory.Type);
         builder.Services.AddAzureBlobStorageManager(builder.Configuration);
         if (configure is not null)
             builder.Services.Configure(configure);
         builder.Services.AddHealthChecks().AddCheck<AzureBlobHealthCheck>("kitstack_azure_blob");
         return builder;
     }
+
+    /// <summary>
+    /// Register a named instance (an Azure Blob container), bound from <c>Storage:Instances:{name}:Azure</c> and <paramref name="configure"/>,
+    /// with storage overrides from <c>Storage:Instances:{name}</c>. Resolve it with <c>IFileStorageManagerProvider.Get(name)</c>
+    /// or <c>[FromKeyedServices(name)] IFileStorageManager</c>.
+    /// </summary>
+    public static KitStackStorageBuilder AddAzureBlob(this KitStackStorageBuilder builder, string name, Action<AzureBlobOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        if (StorageInstance.IsDefault(name))
+            return builder.AddAzureBlob(configure);
+        return builder.AddAzureBlobProvider().AddNamedStorageInstance(name, AzureBlobStorageProviderFactory.Type, "Azure", configure);
+    }
+
+    /// <summary>Register the provider factory so runtime instances with <c>ProviderType = "Azure"</c> can be built.</summary>
+    public static KitStackStorageBuilder AddAzureBlobProvider(this KitStackStorageBuilder builder)
+        => builder.AddStorageProviderFactory<AzureBlobStorageProviderFactory>();
 
     public static IServiceCollection AddAzureBlobStorageManager(this IServiceCollection services, IConfiguration configuration)
     {

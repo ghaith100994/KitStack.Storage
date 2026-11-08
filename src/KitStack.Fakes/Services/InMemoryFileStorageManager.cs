@@ -56,6 +56,9 @@ public class InMemoryFileStorageManager : FileStorageManagerBase, IFakeFileStore
         return location;
     }
 
+    /// <inheritdoc/>
+    protected override string? GetWriteLocation(string folder, string fileName, string variantType) => $"{folder}/{fileName}";
+
     protected override async Task OverwriteCoreAsync(StorageLocation location, Stream content, long length, string contentType, CancellationToken cancellationToken)
     {
         await SimulateDelayAsync(cancellationToken).ConfigureAwait(false);
@@ -116,6 +119,7 @@ public class InMemoryFileStorageManager : FileStorageManagerBase, IFakeFileStore
         var copy = new StorageOptions
         {
             Provider = storage?.Provider,
+            InstanceName = storage?.InstanceName,
             MasterEncryptionKey = storage?.MasterEncryptionKey,
             Upload = new UploadPolicy
             {
