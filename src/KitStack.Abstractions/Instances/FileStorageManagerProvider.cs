@@ -54,7 +54,7 @@ internal sealed partial class FileStorageManagerProvider : IFileStorageManagerPr
             var names = new HashSet<string>(_statics.Keys, StorageInstance.Comparer);
             if (_hasUnkeyedManager)
                 names.Add(StorageInstance.Default);
-            names.UnionWith(_entries.Keys);
+            names.UnionWith(_entries.Values.Select(e => e.Name));
             return names.Order(StorageInstance.Comparer).ToList();
         }
     }
@@ -179,12 +179,12 @@ internal sealed partial class FileStorageManagerProvider : IFileStorageManagerPr
             _entries[key] = built;
             if (entry is null)
             {
-                LogBuilt(_logger, key, definition.ProviderType, definition.Version);
+                LogBuilt(_logger, built.Name, definition.ProviderType, definition.Version);
             }
             else
             {
                 entry.Handle?.Retire();
-                LogRebuilt(_logger, key, definition.ProviderType, entry.Version, definition.Version);
+                LogRebuilt(_logger, built.Name, definition.ProviderType, entry.Version, definition.Version);
             }
 
             return built;

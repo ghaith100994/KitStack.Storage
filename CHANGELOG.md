@@ -1,5 +1,83 @@
 # Changelog
 
+## 0.3.0
+
+All changes are additive: 0.2 code compiles and behaves the same. New interface members have default
+implementations, and every package versions together at 0.3.0.
+
+### Added
+
+- **Named storage instances.** `StorageInstance` names (`default` for the unnamed registration, still resolvable as the
+  unkeyed `IFileStorageManager`). Provider packages gain named overloads (`AddLocal("name", ...)`, `AddS3("name", ...)`,
+  `AddAzureBlob`, `AddSftp`, `AddFtp`, `AddFake`), bound from `Storage:Instances:{name}:{Provider}` with named options;
+  a second named `AddS3` no longer overwrites the first. Named instances are also keyed services.
+- **`IFileStorageManagerProvider`** (singleton): `Get(name)`, `GetAsync`, `TryGet`, `Get(IFileEntry)`,
+  `Get(StoredFileRef)` (routing by `StorageName`, `null` = `default`), `Names`, `GetCapabilities`, `Invalidate`,
+  `InvalidateAll`.
+- **Runtime instances.** `IStorageInstanceSource` + `StorageInstanceDefinition` (`Name`, `ProviderType`, `Settings` bound
+  to the provider's options type, `Storage` overrides, `SecretReferences`, `Version`). Built on first use, cached,
+  re-checked after `StorageInstanceCacheOptions.RefreshInterval`, rebuilt when `Version` changes; replaced and evicted
+  builds are disposed exactly once after their in-flight operations and open read streams complete. Stale manager
+  references forward to the current build.
+- **`IStorageProviderFactory`** per provider package (`AddLocalProvider()`, `AddS3Provider()`, `AddAzureBlobProvider()`,
+  `AddSftpProvider()`, `AddFtpProvider()`, `AddFakeProvider()`, also registered by the existing `AddXxx()` calls) and the
+  `StorageProviderFactory<TOptions>` base class.
+- **`IStorageInstanceValidator.TestAsync`**: validates a definition and probes connectivity without caching it.
+- **Secrets by reference**: `IStorageSecretResolver` (default: `StorageSecrets:{reference}` from configuration),
+  `StorageSecretFields` for the well-known fields (S3 keys, Azure connection string, SFTP/FTP password and key, encryption
+  keys). Resolved values are never logged and are redacted from exceptions, validation errors and health descriptions.
+- **Per-instance storage options** (`StorageOptionsOverrides`: upload policy, master/previous encryption keys,
+  `DisableEncryption`) merged over the global options; `ConfigureInstance(name, ...)`. Instances without a master key
+  still read files encrypted with their previous keys.
+- **Non-generic write API**: `CreateAsync(StorageWriteOptions, Stream)` and `CreateWithVariantsAsync(StorageWriteOptions, Stream)`
+  with `EntityName`, explicit sanitised `Folder` (absolute paths and `.`/`..` segments rejected), a per-call `Policy`
+  that can only tighten the instance policy, `Metadata` and an entity `Link`. The generic overloads delegate to it.
+  Entries record their logical folder in `Metadata["Folder"]`.
+- **Instance identity and versions on entries**: `IFileEntry.StorageName`, `PreviousVersionId`, `VersionNumber`,
+  `SupersededById` (default-implemented), on `FileEntry`, the EF and Mongo records; `StoredFileRef.StorageName`.
+- **`IFileTransferService.TransferAsync`**: moves a file and its variants between instances (decrypt, re-encrypt with
+  the target keys, keep folder/name/metadata, verify checksums, re-point metadata atomically with the same `Id` and
+  links, optionally delete the source). Idempotent and resumable; returns per-step status.
+- **`IFileVersionService`**: `ReplaceAsync` with `ReplaceOptions.KeepPreviousVersion`, `ListVersionsAsync`,
+  `RestoreVersionAsync` (creates a new version from old bytes), `PurgeVersionsAsync`.
+- **`IFileEntryStore`**: `QueryAsync` (`FileEntryQuery` → `FileEntryPage`), `GetUsageAsync` (grouped in the database),
+  `FindDuplicatesAsync` (per instance unless `AcrossStorageInstances`), `FindManyAsync`, `RelocateAsync`,
+  `SupersedeAsync`, `ListVersionsAsync`, `FindByLocationAsync(location, storageName)` and
+  `ListOrphansAsync(..., storageName, includeSupersededVersions)`. Implemented natively by the EF Core, MongoDB and
+  new in-memory stores.
+- **`IStorageContentAccess`** (raw put/verify/delete of bytes, location prediction) implemented by every provider.
+- **Health and capabilities**: `IStorageHealthProbe.CheckAsync(name)` reusing each provider's health check per instance,
+  `AddKitStackStorageHealthChecks()` (`kitstack_storage_{name}`), `StorageCapabilities` per provider type and instance.
+- **S3**: `IS3ClientFactory` to supply clients; `EnsureS3BucketsExistAsync(storageName)`.
+- **KitStack.Fakes**: `AddFake("name")` (keyed `IFakeFileStore`), `FakeStorageProviderFactory`, `InMemoryFileEntryStore`
+  and `AddInMemoryStore()`.
+- `FileStorageManagerExtensions.Unwrap<T>()`, non-generic `ReplaceAsync(existing, options, content)`.
+
+### Changed
+
+- `FileEntryTrackingStorageManager`, `FileOrphanSweeper`, `FileOrphanSweeperHostedService` and `MapKitStackStorageFiles`
+  route each operation to the instance that owns the entry. The sweeper isolates failing instances, accepts a
+  `storageName` (`SweepAsync(minAge, batchSize, storageName)`, `OrphanSweeperOptions.StorageNames`) and never deletes
+  previous versions kept by `KeepPreviousVersion`. `MapKitStackStorageFiles` accepts `?storage={name}` on location URLs.
+- `AddFileEntryTracking()` no longer requires an unnamed provider when provider factories, named instances or an instance
+  source are registered.
+- `FileOrphanSweeper` has a single constructor `(store, storage = null, logger = null, provider = null)` (source compatible).
+- Entries created by every provider carry `StorageName` (`default` for the unnamed instance) and `Metadata["Folder"]`.
+
+### Migration notes
+
+- **EF Core**: add a migration. New nullable `FileEntries.StorageName` (max 100), `PreviousVersionId`, `SupersededById`,
+  `VersionNumber` (int, default 1), indexes `(StorageName, IsDeleted)`, `(StorageName, Checksum)`, `SupersededById`,
+  and a nullable `{Navigation}_StorageName` column for each `OwnsStoredFile` mapping (`StorageName` for `OwnsStoredFiles`
+  tables). `null` = `default`; no data migration needed. See the EF Core package README for the migration code.
+- **MongoDB**: new optional fields `StorageName`, `PreviousVersionId`, `VersionNumber`, `SupersededById` and indexes
+  `(StorageName, IsDeleted)`, `(StorageName, Checksum)`, `SupersededById` (created automatically). Missing fields read as
+  `default` / version 1 / current.
+- Custom `IFileEntryStore` implementations keep compiling; `QueryAsync`, `GetUsageAsync`, `FindDuplicatesAsync`,
+  `RelocateAsync` and `SupersedeAsync` throw `NotSupportedException` until implemented. Their `ListOrphansAsync` should
+  exclude entries whose `SupersededById` is set.
+- `StoredFileRef` copies a location: after a transfer, refresh references by `FileEntryId` with `FindManyAsync`.
+
 ## 0.2.0
 
 ### Added
