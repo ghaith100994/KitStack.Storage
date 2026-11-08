@@ -34,6 +34,16 @@ public sealed record StoredFileRef
     /// <summary>Whether the content is encrypted at rest.</summary>
     public bool Encrypted { get; init; }
 
+    /// <summary>
+    /// Storage instance that holds the file; <c>null</c> means <c>default</c>.
+    /// </summary>
+    /// <remarks>
+    /// A reference is a copy of the entry's location at the time it was taken. After a file is moved to another
+    /// instance (<c>IFileTransferService</c>) the copy is stale: resolve the current location by
+    /// <see cref="FileEntryId"/> through <c>IFileEntryStore.FindAsync</c> / <c>FindManyAsync</c> and refresh it.
+    /// </remarks>
+    public string? StorageName { get; init; }
+
     /// <summary>Create a reference from a stored entry.</summary>
     public static StoredFileRef From(IFileEntry entry)
     {
@@ -48,6 +58,7 @@ public sealed record StoredFileRef
             Checksum = entry.Checksum,
             StorageProvider = entry.StorageProvider,
             Encrypted = entry.Encrypted,
+            StorageName = entry.StorageName,
         };
     }
 
@@ -66,6 +77,7 @@ public sealed record StoredFileRef
         Checksum = Checksum,
         StorageProvider = StorageProvider,
         Encrypted = Encrypted,
+        StorageName = StorageName,
         FileExtension = Path.GetExtension(FileName).ToLowerInvariant(),
         VariantType = "original",
         LastAccessedTime = null,

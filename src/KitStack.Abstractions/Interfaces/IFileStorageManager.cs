@@ -115,4 +115,28 @@ public interface IFileStorageManager
     /// <param name="lifetime">How long a signed URL stays valid. <c>null</c> uses the provider default. Ignored by unsigned URLs.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     Task<Uri?> GetUrlAsync(IFileEntry entry, TimeSpan? lifetime = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Name of the storage instance this manager serves (<c>StorageInstance.Default</c> unless registered with a name).
+    /// </summary>
+    /// <remarks>Default implementation so 0.2 implementations keep compiling.</remarks>
+    string StorageName => Instances.StorageInstance.Default;
+
+    /// <summary>
+    /// Create and store a file described by <paramref name="options"/>: explicit entity name or folder, optional
+    /// stricter per-call policy, metadata and entity link. The generic overloads delegate to this method.
+    /// The stream is read to the end but not disposed.
+    /// </summary>
+    /// <exception cref="StorageValidationException">
+    /// The name, folder or category is invalid (including path traversal attempts), or the file violates the upload policy.
+    /// </exception>
+    /// <remarks>The default implementation throws <see cref="NotSupportedException"/>; <c>FileStorageManagerBase</c> implements it.</remarks>
+    Task<IFileEntry> CreateAsync(StorageWriteOptions options, Stream content, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException($"{GetType().Name} does not implement CreateAsync(StorageWriteOptions, Stream).");
+
+    /// <summary>
+    /// Non-generic counterpart of <c>CreateWithVariantsAsync&lt;T&gt;</c>; see <see cref="CreateAsync(StorageWriteOptions, Stream, CancellationToken)"/>.
+    /// </summary>
+    Task<(IFileEntry Primary, List<IFileEntry> Variants)> CreateWithVariantsAsync(StorageWriteOptions options, Stream content, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException($"{GetType().Name} does not implement CreateWithVariantsAsync(StorageWriteOptions, Stream).");
 }

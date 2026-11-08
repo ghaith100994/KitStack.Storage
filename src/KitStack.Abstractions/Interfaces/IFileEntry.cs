@@ -117,4 +117,39 @@ public interface IFileEntry
     /// Optional relationships linking this file to one or more domain entities.
     /// </summary>
     ICollection<FileRelatedEntity>? RelatedEntities { get; set; }
+
+    /// <summary>
+    /// Name of the storage instance that holds the bytes (see <c>StorageInstance</c>). <c>null</c> for entries created
+    /// before 0.3, which belong to the <c>default</c> instance.
+    /// </summary>
+    /// <remarks>Default implementation for compatibility with existing <see cref="IFileEntry"/> types, like <see cref="Checksum"/>.</remarks>
+    string? StorageName
+    {
+        get => null;
+        set { }
+    }
+
+    /// <summary>Id of the version this entry replaced (see <c>ReplaceOptions.KeepPreviousVersion</c>), or <c>null</c>.</summary>
+    DefaultIdType? PreviousVersionId
+    {
+        get => null;
+        set { }
+    }
+
+    /// <summary>Version number within a version chain, starting at 1 (the value for entries created before 0.3).</summary>
+    int VersionNumber
+    {
+        get => 1;
+        set { }
+    }
+
+    /// <summary>
+    /// Id of the entry that superseded this one when it was kept as a previous version, or <c>null</c> when this
+    /// entry is the current version. Superseded entries are never reported as orphans.
+    /// </summary>
+    DefaultIdType? SupersededById
+    {
+        get => null;
+        set { }
+    }
 }

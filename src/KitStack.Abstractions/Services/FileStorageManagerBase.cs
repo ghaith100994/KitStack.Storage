@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using KitStack.Abstractions.Exceptions;
+using KitStack.Abstractions.Instances;
 using KitStack.Abstractions.Extensions;
 using KitStack.Abstractions.Interfaces;
 using KitStack.Abstractions.IO;
@@ -20,7 +21,7 @@ namespace KitStack.Abstractions.Services;
 /// (<see cref="WriteCoreAsync"/>, <see cref="OpenReadCoreAsync"/>, <see cref="ExistsCoreAsync"/>,
 /// <see cref="DeleteCoreAsync"/> and optionally <see cref="GetUrlCoreAsync"/>).
 /// </summary>
-public abstract class FileStorageManagerBase : IFileStorageManager
+public abstract class FileStorageManagerBase : IFileStorageManager, IStorageContentAccess
 {
     /// <summary>Variant type of an original (non-variant) file.</summary>
     public const string OriginalVariant = "original";
@@ -35,7 +36,21 @@ public abstract class FileStorageManagerBase : IFileStorageManager
     {
         StorageOptions = storageOptions ?? new StorageOptions();
         Encryptor = encryptor ?? AesGcmFileContentEncryptor.FromOptions(StorageOptions);
+        StorageName = StorageInstance.Normalize(StorageOptions.InstanceName);
+
+        // An instance that writes plaintext can still read files encrypted earlier with one of its previous keys.
+        _decryptor = Encryptor ?? (StorageOptions.PreviousEncryptionKeys.FirstOrDefault(k => !string.IsNullOrWhiteSpace(k)) is { } first
+            ? new AesGcmFileContentEncryptor(first, StorageOptions.PreviousEncryptionKeys.Where(k => k != first))
+            : null);
     }
+
+    private readonly IFileContentEncryptor? _decryptor;
+
+    /// <summary>
+    /// Name of the storage instance this manager serves (<see cref="StorageOptions.InstanceName"/>, or <c>default</c>).
+    /// Written into <see cref="IFileEntry.StorageName"/> of every entry it creates.
+    /// </summary>
+    public string StorageName { get; }
 
     /// <summary>Shared storage options.</summary>
     protected StorageOptions StorageOptions { get; }
@@ -79,6 +94,12 @@ public abstract class FileStorageManagerBase : IFileStorageManager
     protected virtual Task OverwriteCoreAsync(StorageLocation location, Stream content, long length, string contentType, CancellationToken cancellationToken)
         => throw new NotSupportedException($"{GetType().Name} does not support overwriting files in place.");
 
+    /// <summary>
+    /// The location <see cref="WriteCoreAsync"/> returns for a folder, file name and variant type, or <c>null</c> (default)
+    /// when it cannot be predicted. Enables resumable transfers (<see cref="IStorageContentAccess.PredictLocation"/>).
+    /// </summary>
+    protected virtual string? GetWriteLocation(string folder, string fileName, string variantType) => null;
+
     /// <summary>Value for <see cref="IFileEntry.StoragePath"/>; <c>null</c> (default) when not applicable.</summary>
     protected virtual string? GetStoragePath(string location) => null;
 
@@ -98,14 +119,10 @@ public abstract class FileStorageManagerBase : IFileStorageManager
     }
 
     /// <inheritdoc/>
-    public async Task<IFileEntry> CreateAsync<T>(
+    public Task<IFileEntry> CreateAsync<T>(
         Stream content, string fileName, string? contentType, string? category, CancellationToken cancellationToken = default)
         where T : class
-    {
-        var stored = await StoreOriginalAsync<T>(content, fileName, contentType, category, cancellationToken).ConfigureAwait(false);
-        await using (stored.Content.ConfigureAwait(false))
-            return stored.Entry;
-    }
+        => CreateAsync(GenericOptions<T>(fileName, contentType, category), content, cancellationToken);
 
     /// <inheritdoc/>
     public async Task<IFileEntry> CreateAsync<T>(
@@ -131,23 +148,45 @@ public abstract class FileStorageManagerBase : IFileStorageManager
     }
 
     /// <inheritdoc/>
-    public async Task<(IFileEntry Primary, List<IFileEntry> Variants)> CreateWithVariantsAsync<T>(
+    public Task<(IFileEntry Primary, List<IFileEntry> Variants)> CreateWithVariantsAsync<T>(
         Stream content, string fileName, string? contentType, string? category, CancellationToken cancellationToken = default)
         where T : class
+        => CreateWithVariantsAsync(GenericOptions<T>(fileName, contentType, category), content, cancellationToken);
+
+    /// <inheritdoc/>
+    public async Task<IFileEntry> CreateAsync(StorageWriteOptions options, Stream content, CancellationToken cancellationToken = default)
     {
-        var stored = await StoreOriginalAsync<T>(content, fileName, contentType, category, cancellationToken).ConfigureAwait(false);
+        var stored = await StoreOriginalAsync(options, content, cancellationToken).ConfigureAwait(false);
+        await using (stored.Content.ConfigureAwait(false))
+            return stored.Entry;
+    }
+
+    /// <inheritdoc/>
+    public async Task<(IFileEntry Primary, List<IFileEntry> Variants)> CreateWithVariantsAsync(
+        StorageWriteOptions options, Stream content, CancellationToken cancellationToken = default)
+    {
+        var stored = await StoreOriginalAsync(options, content, cancellationToken).ConfigureAwait(false);
         await using (stored.Content.ConfigureAwait(false))
         {
-            var options = GetImageProcessingOptions();
+            var imageOptions = GetImageProcessingOptions();
             var primary = stored.Entry;
-            if (options is null || !CanCreateVariants(primary))
+            if (imageOptions is null || !CanCreateVariants(primary))
                 return (primary, []);
 
-            var variants = await ProcessVariantsAsync(primary, stored.Folder, stored.Content, category, options, cancellationToken)
+            var variants = await ProcessVariantsAsync(primary, stored.Folder, stored.Content, options.Category, imageOptions, cancellationToken)
                 .ConfigureAwait(false);
             return (primary, variants);
         }
     }
+
+    private static StorageWriteOptions GenericOptions<T>(string fileName, string? contentType, string? category)
+        => new()
+        {
+            FileName = fileName,
+            DeclaredContentType = contentType,
+            Category = category,
+            EntityName = typeof(T).Name,
+        };
 
     // ── IFileStorageManager: reads, deletes, URLs ───────────────────────────
 
@@ -155,14 +194,14 @@ public abstract class FileStorageManagerBase : IFileStorageManager
     public async Task<Stream> OpenReadAsync(IFileEntry entry, CancellationToken cancellationToken = default)
     {
         var location = ToLocation(entry);
-        if (entry.Encrypted && Encryptor is null)
+        if (entry.Encrypted && _decryptor is null)
             throw new StorageConfigurationException($"File '{entry.FileLocation}' is encrypted but no encryption key is configured.");
 
         var stream = await OpenReadCoreAsync(location, cancellationToken).ConfigureAwait(false)
             ?? throw new StorageNotFoundException($"File '{entry.FileLocation}' was not found.");
 
         entry.LastAccessedTime = DateTimeOffset.UtcNow;
-        return Encryptor is null
+        return _decryptor is null
             ? stream
             : await DecryptIfNeededAsync(stream, entry, cancellationToken).ConfigureAwait(false);
     }
@@ -239,17 +278,32 @@ public abstract class FileStorageManagerBase : IFileStorageManager
             return await CreateAsync<T>(stream, file.FileName, file.ContentType, category, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<StoredOriginal> StoreOriginalAsync<T>(
-        Stream content, string fileName, string? declaredContentType, string? category, CancellationToken cancellationToken)
-        where T : class
+    private async Task<StoredOriginal> StoreOriginalAsync(StorageWriteOptions options, Stream content, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(content);
+        var fileName = options.FileName;
         if (string.IsNullOrWhiteSpace(fileName))
             throw new StorageValidationException("File name is required.");
-        var categoryPath = StoragePaths.SanitizeCategory(category ?? string.Empty);
 
-        var policy = StorageOptions.Upload ?? new UploadPolicy();
         var extension = StoragePaths.GetExtension(fileName);
+        string folder;
+        if (!string.IsNullOrWhiteSpace(options.Folder))
+        {
+            folder = StoragePaths.SanitizeFolder(options.Folder);
+        }
+        else
+        {
+            var categoryPath = StoragePaths.SanitizeCategory(options.Category ?? string.Empty);
+            if (string.IsNullOrWhiteSpace(options.EntityName))
+                throw new StorageValidationException("EntityName is required when no Folder is given.");
+            folder = StoragePaths.Combine(
+                categoryPath,
+                StoragePaths.SanitizeSegment(options.EntityName),
+                ImageProcessingHelper.GetFileTypeFolder(extension));
+        }
+
+        var policy = new EffectivePolicy(StorageOptions.Upload ?? new UploadPolicy(), options.Policy);
         if (!policy.IsExtensionAllowed(extension))
             throw new StorageValidationException($"File extension '{extension}' is not allowed.");
 
@@ -262,10 +316,6 @@ public abstract class FileStorageManagerBase : IFileStorageManager
 
             var id = Guid.CreateVersion7();
             var displayName = Path.GetFileName(fileName.Replace('\\', '/'));
-            var folder = StoragePaths.Combine(
-                categoryPath,
-                StoragePaths.SanitizeSegment(typeof(T).Name),
-                ImageProcessingHelper.GetFileTypeFolder(extension));
             var storedName = $"{id:N}-{StoragePaths.SanitizeSegment(Path.GetFileNameWithoutExtension(displayName))}{extension}";
 
             var entry = new FileEntry
@@ -278,15 +328,30 @@ public abstract class FileStorageManagerBase : IFileStorageManager
                 Checksum = spool.Checksum,
                 UploadedTime = DateTimeOffset.UtcNow,
                 FileExtension = extension,
-                Category = category,
+                Category = options.Category,
                 Encrypted = Encryptor is not null,
                 StorageProvider = StorageProvider,
+                StorageName = StorageName,
                 LastAccessedTime = DateTimeOffset.UtcNow,
                 VariantType = OriginalVariant,
-                Metadata = new Dictionary<string, string>(),
+                Metadata = options.Metadata is null ? new Dictionary<string, string>() : new Dictionary<string, string>(options.Metadata),
             };
-            if (!string.IsNullOrWhiteSpace(declaredContentType))
-                entry.Metadata["DeclaredContentType"] = declaredContentType;
+            if (!string.IsNullOrWhiteSpace(options.DeclaredContentType))
+                entry.Metadata[FileEntryMetadataKeys.DeclaredContentType] = options.DeclaredContentType;
+            entry.Metadata[FileEntryMetadataKeys.Folder] = folder;
+            if (options.Link is { } link)
+            {
+                if (string.IsNullOrWhiteSpace(link.EntityName) || string.IsNullOrWhiteSpace(link.EntityId))
+                    throw new StorageValidationException("Link requires EntityName and EntityId.");
+                entry.RelatedEntities!.Add(new FileRelatedEntity
+                {
+                    EntityName = link.EntityName,
+                    EntityId = link.EntityId,
+                    Notes = link.Notes,
+                    IsUsed = true,
+                    LinkedOn = DateTimeOffset.UtcNow,
+                });
+            }
 
             entry.FileLocation = await WriteAsync(
                 folder, storedName, spool.Rewind(), spool.Length, contentType, OriginalVariant, cancellationToken).ConfigureAwait(false);
@@ -300,6 +365,66 @@ public abstract class FileStorageManagerBase : IFileStorageManager
             await spool.DisposeAsync().ConfigureAwait(false);
             throw;
         }
+    }
+
+    // ── IStorageContentAccess ───────────────────────────────────────────────
+
+    /// <inheritdoc/>
+    public string? PredictLocation(string folder, string fileName, string variantType)
+        => GetWriteLocation(StoragePaths.SanitizeFolder(folder), StoragePaths.SanitizeSegment(fileName), variantType);
+
+    /// <inheritdoc/>
+    public async Task<StoredContent> PutContentAsync(StorageContentWrite request, Stream plaintext, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(plaintext);
+        var folder = StoragePaths.SanitizeFolder(request.Folder);
+        var fileName = StoragePaths.SanitizeSegment(request.FileName);
+        var spool = await SpooledContent.CreateAsync(plaintext, 0, cancellationToken).ConfigureAwait(false);
+        await using (spool.ConfigureAwait(false))
+        {
+            var variantType = string.IsNullOrWhiteSpace(request.VariantType) ? OriginalVariant : request.VariantType;
+            var location = await WriteAsync(folder, fileName, spool.Rewind(), spool.Length, request.ContentType, variantType, cancellationToken)
+                .ConfigureAwait(false);
+            return new StoredContent(location, GetStoragePath(location), spool.Length, spool.Checksum, Encryptor is not null, StorageProvider);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<StoredContent?> VerifyContentAsync(string location, string variantType, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(location))
+            throw new StorageValidationException("Location is required.");
+        var raw = await OpenReadCoreAsync(new StorageLocation(location, string.IsNullOrWhiteSpace(variantType) ? OriginalVariant : variantType), cancellationToken)
+            .ConfigureAwait(false);
+        if (raw is null)
+            return null;
+
+        var (plaintext, encrypted) = _decryptor is null
+            ? (raw, false)
+            : await DecryptCoreAsync(raw, new FileEntry { FileLocation = location }, cancellationToken).ConfigureAwait(false);
+        await using (plaintext.ConfigureAwait(false))
+        {
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            var buffer = new byte[81920];
+            long size = 0;
+            int read;
+            while ((read = await plaintext.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+            {
+                hash.AppendData(buffer, 0, read);
+                size += read;
+            }
+
+            return new StoredContent(location, GetStoragePath(location), size, Convert.ToHexStringLower(hash.GetHashAndReset()), encrypted, StorageProvider);
+        }
+    }
+
+    /// <inheritdoc/>
+    public Task DeleteContentAsync(string location, string variantType, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(location))
+            throw new StorageValidationException("Location is required.");
+        return DeleteCoreAsync(new StorageLocation(location, string.IsNullOrWhiteSpace(variantType) ? OriginalVariant : variantType), cancellationToken);
     }
 
     private Task<string> WriteAsync(
@@ -327,8 +452,11 @@ public abstract class FileStorageManagerBase : IFileStorageManager
     }
 
     private async Task<Stream> DecryptIfNeededAsync(Stream stream, IFileEntry entry, CancellationToken cancellationToken)
+        => (await DecryptCoreAsync(stream, entry, cancellationToken).ConfigureAwait(false)).Plaintext;
+
+    private async Task<(Stream Plaintext, bool Encrypted)> DecryptCoreAsync(Stream stream, IFileEntry entry, CancellationToken cancellationToken)
     {
-        var encryptor = Encryptor!;
+        var encryptor = _decryptor!;
         Stream source = stream;
         bool encrypted;
 
@@ -351,7 +479,7 @@ public abstract class FileStorageManagerBase : IFileStorageManager
                 throw new StorageException($"File '{entry.FileLocation}' is flagged as encrypted but its content is not.");
             }
 
-            return source;
+            return (source, false);
         }
 
         await using (source.ConfigureAwait(false))
@@ -363,7 +491,7 @@ public abstract class FileStorageManagerBase : IFileStorageManager
             {
                 await encryptor.DecryptAsync(source, plaintext, cancellationToken).ConfigureAwait(false);
                 plaintext.Seek(0, SeekOrigin.Begin);
-                return plaintext;
+                return (plaintext, true);
             }
             catch
             {
@@ -452,6 +580,8 @@ public abstract class FileStorageManagerBase : IFileStorageManager
 
             var entry = BuildVariantEntry(location, size, variantType, category, primary);
             entry.Checksum = checksum;
+            entry.StorageName = StorageName;
+            (entry.Metadata ??= new Dictionary<string, string>())[FileEntryMetadataKeys.Folder] = StoragePaths.Combine(folder, variantFolder);
             entry.Encrypted = Encryptor is not null;
             entry.StoragePath = GetStoragePath(location);
             entry.CopyRelationsFrom(primary);
@@ -514,6 +644,23 @@ public abstract class FileStorageManagerBase : IFileStorageManager
     }
 
     private sealed record StoredOriginal(IFileEntry Entry, string Folder, SpooledContent Content);
+
+    /// <summary>The instance policy intersected with an optional per-call policy: a file must satisfy both.</summary>
+    private sealed class EffectivePolicy(UploadPolicy instance, UploadPolicy? call)
+    {
+        public long MaxBytes => (instance.MaxBytes, call?.MaxBytes ?? 0) switch
+        {
+            (> 0 and var a, > 0 and var b) => Math.Min(a, b),
+            (> 0 and var a, _) => a,
+            (_, var b) => b,
+        };
+
+        public bool IsExtensionAllowed(string extension)
+            => instance.IsExtensionAllowed(extension) && (call?.IsExtensionAllowed(extension) ?? true);
+
+        public bool IsContentTypeAllowed(string contentType)
+            => instance.IsContentTypeAllowed(contentType) && (call?.IsContentTypeAllowed(contentType) ?? true);
+    }
 }
 
 /// <summary>Content handed to <see cref="FileStorageManagerBase"/> providers for storage.</summary>

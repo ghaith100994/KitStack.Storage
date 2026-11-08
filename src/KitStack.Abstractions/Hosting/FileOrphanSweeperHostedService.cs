@@ -24,7 +24,15 @@ public sealed partial class FileOrphanSweeperHostedService(
                 await using (scope.ConfigureAwait(false))
                 {
                     var sweeper = scope.ServiceProvider.GetRequiredService<FileOrphanSweeper>();
-                    await sweeper.SweepAsync(settings.MinAge, settings.BatchSize, stoppingToken).ConfigureAwait(false);
+                    if (settings.StorageNames.Count == 0)
+                    {
+                        await sweeper.SweepAsync(settings.MinAge, settings.BatchSize, storageName: null, stoppingToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        foreach (var name in settings.StorageNames)
+                            await sweeper.SweepAsync(settings.MinAge, settings.BatchSize, name, stoppingToken).ConfigureAwait(false);
+                    }
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

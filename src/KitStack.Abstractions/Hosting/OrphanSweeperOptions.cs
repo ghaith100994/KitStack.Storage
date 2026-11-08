@@ -14,4 +14,7 @@ public sealed class OrphanSweeperOptions
 
     /// <summary>Maximum files deleted per sweep. Default 100.</summary>
     public int BatchSize { get; set; } = 100;
+
+    /// <summary>Instances to sweep (each with its own batch). Empty (default): every instance in one batch.</summary>
+    public IList<string> StorageNames { get; } = [];
 }

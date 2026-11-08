@@ -44,4 +44,12 @@ public class FileEntry : IFileEntry
     public bool IsDeleted { get; set; }
 
     public ICollection<FileRelatedEntity>? RelatedEntities { get; set; } = [];
+
+    public string? StorageName { get; set; }
+
+    public DefaultIdType? PreviousVersionId { get; set; }
+
+    public int VersionNumber { get; set; } = 1;
+
+    public DefaultIdType? SupersededById { get; set; }
 }
